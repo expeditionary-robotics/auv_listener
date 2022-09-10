@@ -54,13 +54,13 @@ def filter_sentry_science_message(message):
 
 def filter_experimental_message(message):
     """Stand-in function for experimental sensors parsed in queue."""
-    pass
+    return str(message)
 
 
-def parse_sentry_payload(message, status_queue, science_queue):
+def parse_sentry_payload(message, status_queue, science_queue, experimental_queue):
     """Inspects the message and returns the message type.
-    One of "status", "science", or None
-    Provide the message and queue targets for status and science.
+    One of "status", "science", "experimental", or None
+    Provide the message and queue targets for status, science, and experimental.
     Returns message type, message payload, and cleaned timestamp.
     """
     if not "SDQ" in message:
@@ -77,6 +77,8 @@ def parse_sentry_payload(message, status_queue, science_queue):
             return "status", payload, timestamp
         elif queue == science_queue:
             return "science", payload, timestamp
+        elif queue == experimental_queue:
+            return "experimental", payload, timestamp
         else:
             return None, message, timestamp
     except:

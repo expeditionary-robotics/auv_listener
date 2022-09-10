@@ -218,6 +218,7 @@ class Live2DPlot(LiveTimePlot):
         """How the plot should refresh over time."""
         # Grab the data being written to file
         if os.path.isfile(self.file):
+            print("Here")
             lines = pd.read_csv(self.file, sep=",", header=None)
             cols_to_keep = [self.x_index]
             for y in self.y_index:

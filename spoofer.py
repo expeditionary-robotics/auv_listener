@@ -16,7 +16,7 @@ import argparse
 import socket
 import time
 import numpy as np
-from udp_utils import sentry_science_message, sentry_status_message
+from udp_utils import sentry_science_message, sentry_status_message, pythia_message
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--ip", action="store",
@@ -58,7 +58,7 @@ if file is not None:
 else:
     while(1):
         msg = np.random.choice(
-            [sentry_status_message(), sentry_science_message()])
+            [sentry_status_message(), sentry_science_message(), pythia_message()])
         print(msg)
         sock.sendto(bytes(msg, encoding='utf8'), (ACOMMS_IP, ACOMMS_PORT))
         time.sleep(ACOMMS_PUB_RATE)

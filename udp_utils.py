@@ -110,21 +110,19 @@ def sentry_science_message():
 def pythia_message():
     """Creates spoofed Pythia message, an experimental instrument."""
     lasertime = datetime.datetime.now()
-    lasertemp = np.random.rand(1)[0]
-    ringdown = np.random.rand(1)[0]
-    methane = np.random.rand(1)[0]
-    auxtime = np.random.rand(1)[0]
-    celltemp = np.random.rand(1)[0]
-    cellpres = np.random.rand(1)[0]
-    housetemp = np.random.rand(1)[0]
-    housepres = np.random.rand(1)[0]
-    househum = np.random.rand(1)[0]
-    states = [np.random.randint(0, 2) for m in range(6)]
+    filename = np.random.rand(1)[0]
+    methane_conc = np.random.rand(1)[0] * 5
+    inlet_press = np.random.rand(1)[0]
+    inlet_temp = np.random.rand(1)[0]
+    house_press = np.random.rand(1)[0]
+    fluid_temp = np.random.rand(1)[0]
+    junc_temp = np.random.rand(1)[0]
+    humidity = np.random.rand(1)[0]
+    avg_volt = np.random.rand(1)[0]
     front = "SMS>blah|SDQ 101:"
-    mess = front + str(lasertime) + ',' + str(lasertemp) + ',' + str(ringdown) + \
-        ',' + str(methane) + ',' + str(auxtime) + ',' + str(celltemp) + ',' + str(cellpres) + \
-        ',' + str(housetemp) + ',' + str(housepres) + \
-        ',' + str(househum) + ',' + str(states)
+    mess = front + str(lasertime) + ',' + str(filename) + ',' + str(methane_conc) + \
+        ',' + str(inlet_press) + ',' + str(inlet_temp) + ',' + str(house_press) + ',' + str(fluid_temp) + \
+        ',' + str(junc_temp) + ',' + str(humidity) + ',' + str(avg_volt)
     return mess
 
 

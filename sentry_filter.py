@@ -19,6 +19,7 @@ from filter_utils import filter_sentry_science_message, \
 # Globals which may need to change
 STATUS_QUEUE = 0
 SCIENCE_QUEUE = 34
+PYTHIA_QUEUE = 101
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -65,7 +66,7 @@ if __name__ == '__main__':
             if len(line) == 0:
                 continue
 
-            msg_type, payload, timestamp = parse_sentry_payload(line, STATUS_QUEUE, SCIENCE_QUEUE)
+            msg_type, payload, timestamp = parse_sentry_payload(line, STATUS_QUEUE, SCIENCE_QUEUE, PYTHIA_QUEUE)
 
             if msg_type is None:  # only care about certain queues
                 continue
