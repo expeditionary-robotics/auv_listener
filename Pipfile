@@ -11,6 +11,7 @@ datetime = "*"
 pandas = "*"
 argparse = "*"
 bagpy = "*"
+dash = "*"
 
 [dev-packages]
 

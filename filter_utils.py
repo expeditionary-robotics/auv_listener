@@ -85,7 +85,7 @@ def parse_sentry_payload(message, status_queue, science_queue, experimental_queu
         return None, message, timestamp
 
 
-def parse_usbl_payload(message, sentry_file_target, jason_file_target, ship_file_target, ctd_file_target, sentry_id, jason_id, ship_id, ctd_id):
+def parse_usbl_payload(message, file_targets, target_ids):
     """Filters message of format:
     VFR 2019/09/24 13:27:58.033 2 0 SOLN_USBL -125.079565 44.489675 -597.900 0.000 10 0.00 0.00
     """
@@ -96,40 +96,17 @@ def parse_usbl_payload(message, sentry_file_target, jason_file_target, ship_file
     info = f"{new_stamp} {packets[2]},{packets[6]},{packets[7]},{packets[8]}"
 
     if "VFR" in packets[0]:
-        if packets[4] == sentry_id and "USBL" in packets[5]:
-            if os.path.isfile(sentry_file_target):
-                mode = "a"
+        for ft, tid in zip (file_targets, target_ids):
+            if packets[4] == tid and ("USBL" in packets[5] or "SOLN_GPS0" in packets[5]):
+                if os.path.isfile(ft):
+                    mode = "a"
+                else:
+                    mode = "w+"
+                with open(ft, mode) as rf:
+                    rf.write(f"{info}\n")
+                    rf.flush()
             else:
-                mode = "w+"
-            with open(sentry_file_target, mode) as rf:
-                rf.write(f"{info}\n")
-                rf.flush()
-        elif packets[4] == jason_id and "USBL" in packets[5]:
-            if os.path.isfile(jason_file_target):
-                mode = "a"
-            else:
-                mode = "w+"
-            with open(jason_file_target, mode) as rf:
-                rf.write(f"{info}\n")
-                rf.flush()
-        elif packets[4] == ship_id and "SOLN_GPS0" in packets[5]:
-            if os.path.isfile(ship_file_target):
-                mode = "a"
-            else:
-                mode = "w+"
-            with open(ship_file_target, mode) as rf:
-                rf.write(f"{info}\n")
-                rf.flush()
-        elif packets[4] == ctd_id and "USBL" in packets[5]:
-            if os.path.isfile(ctd_file_target):
-                mode = "a"
-            else:
-                mode = "w+"
-            with open(ctd_file_target, mode) as rf:
-                rf.write(f"{info}\n")
-                rf.flush()
-        else:
-            pass
+                pass
     else:
         pass
 

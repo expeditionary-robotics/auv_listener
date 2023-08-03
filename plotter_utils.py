@@ -1,13 +1,17 @@
 """Utilities file for making plotters.
 
 Authors: Genevieve Flaspohler and Victoria Preston
-Update: August 2022
+Update: August 2023
 Contact: {geflaspo, vpreston}@mit.edu
 """
 
 import os
 import time
 import pandas as pd
+import numpy as np
+
+from dash import Dash, html, dcc, callback, Output, Input, State
+import plotly.express as px
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -371,3 +375,67 @@ class LiveSpatialPlot(Live2DPlot):
                 divider = make_axes_locatable(ax)
                 cax = divider.append_axes('right', size='5%', pad=0.05)
                 self.fig.colorbar(scat, cax=cax, orientation='vertical')
+
+
+class SentryDashboard(object):
+    """Creates a plotly dashboard that updates with streamed data."""
+
+    def __init__(self, datafile, bathyfile, liveplot):
+        self.datafile = datafile
+        self.bathyfile = bathyfile
+        self.liveplot = liveplot
+
+        # read in the continuous data and set timing loop if we are liveplotting
+        self.df = pd.read_csv(self.datafile, sep=",", header=None, names=["Time", "Oxygen", "Turbidity", "ORP", "Temperature", "Salinity", "Depth"])
+        self.df["Time"] = pd.to_datetime(self.df["Time"], utc=True)
+        self.df = self.df.set_index("Time").sort_index()
+        app = Dash(__name__)
+        app.layout = self._create_layout()
+        
+        # @callback(Output("graph-content", "figure"),
+        #           Input("dropdown-selection", "value"))
+        # def update_graph(value):
+        #     dff = self.df[self.df.country==value]
+        #     self.value = value
+        #     return px.line(dff, x="year", y="pop")
+        
+        @callback(Output("graph-content", "figure"),
+                  Input("graph-update", "n_intervals"),
+                  State("dropdown-selection", "value"))
+        def stream(n, value):
+            self.df = pd.read_csv(self.datafile, sep=",", header=None, names=["Time", "Oxygen", "Turbidity", "ORP", "Temperature", "Salinity", "Depth"])
+            self.df["Time"] = pd.to_datetime(self.df["Time"], utc=True)
+            self.df = self.df.set_index("Time").sort_index()
+            self.value=value
+            fig = px.line(self.df, x=self.df.index, y=self.value)
+            return fig
+        
+        app.run(debug=True)
+
+        # set displays and layout
+
+        # write data to the displays
+
+        # refresh
+        self.animate()
+    
+    def _create_layout(self):
+        """Create the dashboard scene."""
+        self.value="Oxygen"
+        layout = html.Div([html.H1(children="Sentry Dashboard", style={"textAlign": "center"}),
+                               dcc.Dropdown(self.df.columns.unique(), self.value, id="dropdown-selection"),
+                               dcc.Graph(id="graph-content"),
+                               dcc.Interval(id="graph-update", interval=1*1000, n_intervals=0)])
+        return(layout)
+    
+    def get_sentry_data(self):
+        """Read in the data from the datafile."""
+        pass
+
+    def get_bathy_data(self):
+        """Read in the data from a bathy file, if any."""
+        pass
+    
+    def animate(self):
+        """Callback for updated text."""
+        pass

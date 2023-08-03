@@ -1,3 +1,8 @@
+# Sentry information for filtering
 science_queue: 34
 status_queue: 0
 methane_queue: 101
+
+# USBL information for filtering
+target_ids: [0, 1, 2, 5]
+target_names: ["sentry", "jason", "ship", "rosette"]

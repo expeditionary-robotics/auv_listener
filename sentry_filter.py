@@ -22,7 +22,7 @@ with open("port_config.yaml") as f:
     globes = yaml.safe_load(f)
 STATUS_QUEUE = globes["status_queue"]
 SCIENCE_QUEUE = globes["science_queue"]
-PYTHIA_QUEUE = globes["methane_queue"]
+METHANE_QUEUE = globes["methane_queue"]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -47,7 +47,7 @@ if __name__ == '__main__':
                      filter_sentry_science_message,
                      filter_experimental_message]
     queue_files = [os.path.join(
-        filepath, f"{name}_sentry_{q}.txt") for q in queue_names]
+        filepath, f"{name}_{q}.txt") for q in queue_names]
 
     # Now parse the file target by polling and parsing any new lines
     last_line = 0
@@ -69,7 +69,10 @@ if __name__ == '__main__':
             if len(line) == 0:
                 continue
 
-            msg_type, payload, timestamp = parse_sentry_payload(line, STATUS_QUEUE, SCIENCE_QUEUE, PYTHIA_QUEUE)
+            msg_type, payload, timestamp = parse_sentry_payload(line,
+                                                                STATUS_QUEUE,
+                                                                SCIENCE_QUEUE,
+                                                                METHANE_QUEUE)
 
             if msg_type is None:  # only care about certain queues
                 continue
