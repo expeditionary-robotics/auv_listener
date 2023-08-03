@@ -8,18 +8,21 @@ science, status, or instrument data
 to ./dive617_sentry_{status, science, instrument}.
 
 Authors: Genevieve Flaspohler and Victoria Preston
-Update: August 2022
+Update: August 2023
 Contact: {geflaspo, vpreston}@mit.edu
 """
 import os
+import yaml
 import argparse
 from filter_utils import filter_sentry_science_message, \
     filter_sentry_status_message, filter_experimental_message, parse_sentry_payload
 
 # Globals which may need to change
-STATUS_QUEUE = 0
-SCIENCE_QUEUE = 34
-PYTHIA_QUEUE = 101
+with open("port_config.yaml") as f:
+    globes = yaml.safe_load(f)
+STATUS_QUEUE = globes["status_queue"]
+SCIENCE_QUEUE = globes["science_queue"]
+PYTHIA_QUEUE = globes["methane_queue"]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

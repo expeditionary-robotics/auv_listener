@@ -24,7 +24,7 @@ parser.add_argument("-i", "--ip", action="store",
                     default="127.0.0.1")
 parser.add_argument("-p", "--port", action="store", type=str,
                     help="Port for spoofer.",
-                    default="52464")
+                    default="55904")
 parser.add_argument("-f", "--file", action="store", type=str,
                     help="If set, publish line by line from input file.",
                     default=None)
