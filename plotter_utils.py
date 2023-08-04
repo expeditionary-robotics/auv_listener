@@ -11,7 +11,10 @@ import pandas as pd
 import numpy as np
 
 from dash import Dash, html, dcc, callback, Output, Input, State
+import dash_bootstrap_components as dbc
+import dash
 import plotly.express as px
+import plotly.graph_objects as go
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -386,56 +389,159 @@ class SentryDashboard(object):
         self.liveplot = liveplot
 
         # read in the continuous data and set timing loop if we are liveplotting
-        self.df = pd.read_csv(self.datafile, sep=",", header=None, names=["Time", "Oxygen", "Turbidity", "ORP", "Temperature", "Salinity", "Depth"])
+        self.df = pd.read_csv(self.datafile, sep=",", header=None, names=[
+                              "Time", "Oxygen", "Turbidity", "ORP", "Temperature", "Salinity", "Depth"])
         self.df["Time"] = pd.to_datetime(self.df["Time"], utc=True)
         self.df = self.df.set_index("Time").sort_index()
-        app = Dash(__name__)
-        app.layout = self._create_layout()
-        
-        # @callback(Output("graph-content", "figure"),
-        #           Input("dropdown-selection", "value"))
-        # def update_graph(value):
-        #     dff = self.df[self.df.country==value]
-        #     self.value = value
-        #     return px.line(dff, x="year", y="pop")
-        
-        @callback(Output("graph-content", "figure"),
-                  Input("graph-update", "n_intervals"),
-                  State("dropdown-selection", "value"))
-        def stream(n, value):
-            self.df = pd.read_csv(self.datafile, sep=",", header=None, names=["Time", "Oxygen", "Turbidity", "ORP", "Temperature", "Salinity", "Depth"])
+
+        app = Dash(__name__, use_pages=True, pages_folder="",
+                   external_stylesheets=[dbc.themes.BOOTSTRAP])
+        dash.register_page(
+            "home", path="/", layout=self._create_timeseries_layout())
+        dash.register_page(
+            "correlations", layout=self._create_threshold_layout())
+        dash.register_page("map", layout=self._create_map_layout())
+
+        app.layout = self._create_app_layout()
+
+        @callback(Output("graph-content-oxygen", "figure"),
+                  Output("graph-content-turbidity", "figure"),
+                  Output("graph-content-orp", "figure"),
+                  Output("graph-content-temperature", "figure"),
+                  Output("graph-content-salinity", "figure"),
+                  Output("graph-content-depth", "figure"),
+                  Input("graph-update", "n_intervals"))
+        def stream(n):
+            self.df = pd.read_csv(self.datafile, sep=",", header=None, names=[
+                                  "Time", "Oxygen", "Turbidity", "ORP", "Temperature", "Salinity", "Depth"])
             self.df["Time"] = pd.to_datetime(self.df["Time"], utc=True)
             self.df = self.df.set_index("Time").sort_index()
-            self.value=value
-            fig = px.line(self.df, x=self.df.index, y=self.value)
-            return fig
+            figo2 = px.line(self.df, x=self.df.index, y=self.df.Oxygen)
+            figo2.update_layout(uirevision=True)
+            figturb = px.line(self.df, x=self.df.index, y=self.df.Turbidity)
+            figturb.update_layout(uirevision=True)
+            figorp = px.line(self.df, x=self.df.index, y=self.df.ORP)
+            figorp.update_layout(uirevision=True)
+            figtemp = px.line(self.df, x=self.df.index, y=self.df.Temperature)
+            figtemp.update_layout(uirevision=True)
+            figsalt = px.line(self.df, x=self.df.index, y=self.df.Salinity)
+            figsalt.update_layout(uirevision=True)
+            figdepth = px.line(self.df, x=self.df.index, y=self.df.Depth)
+            figdepth.update_layout(uirevision=True)
+            return(figo2, figturb, figorp, figtemp, figsalt, figdepth)
+
+        @callback(Output("graph-content-correlations", "figure"),
+                  Output("graph-content-anomaly-x", "figure"),
+                  Output("graph-content-anomaly-y", "figure"),
+                  Input("x-axis-selection", "value"),
+                  Input("y-axis-selection", "value"),
+                  Input("anomaly-control", "value"))
+        def plot_thresholds(xval, yval, sdscale):
+            # compute standard deviation and mean
+            df_copy = self.df
+            xvalmean, xvalstd = df_copy[xval].mean(), df_copy[xval].std()
+            yvalmean, yvalstd = df_copy[yval].mean(), df_copy[yval].std()
+            df_copy.loc[:, f"{xval}_meandiff"] = df_copy.apply(
+                lambda x: np.fabs(x[xval] - xvalmean), axis=1)
+            df_copy.loc[:,
+                        f"{xval}_outside"] = (df_copy[f"{xval}_meandiff"] >= xvalstd * sdscale).astype(float)
+            df_copy.loc[:, f"{yval}_meandiff"] = df_copy.apply(
+                lambda x: np.fabs(x[yval] - yvalmean), axis=1)
+            df_copy.loc[:,
+                        f"{yval}_outside"] = (df_copy[f"{yval}_meandiff"] >= yvalstd * sdscale).astype(float)
+            df_copy.loc[:, f"anomaly_correspondence"] = df_copy[f"{yval}_outside"].astype(
+                float) + df_copy[f"{xval}_outside"].astype(float)
+
+            fig = px.scatter(df_copy, x=xval, y=yval, color="anomaly_correspondence", marginal_x="violin",
+                             marginal_y="violin")
+            # fig.update_yaxes(scaleanchor="x", scaleratio=1)
+            fig.update_layout(uirevision=True)
+
+            scatx = px.scatter(df_copy, x=df_copy.index,
+                               y=xval, color=f"{xval}_outside")
+            scaty = px.scatter(df_copy, x=df_copy.index,
+                               y=yval, color=f"{yval}_outside")
+            return(fig, scatx, scaty)
         
+
+        @callback(Output("overhead-map", "figure"),
+                  Output("3d-map", "figure"),
+                  Input("map-selection", "value"),
+                  State("bathy-toggle", "value"))
+        def plot_maps(vtarg, nclicks):
+            """Render the maps on the maps page."""
+            # get the bathy underlay
+            # if nclicks % 2 == 0:
+            #     figs2D = []
+            #     figs3D = []
+            # else:
+            #     bathy = self.get_bathy_data()
+            #     figs2d = [px.scatter(bathy, x="lat", y="lon")]
+            #     figs3d = [px.scatter3d(bathy, x="lat", y="lon", z="depth")]
+
+            # get the usbl data
+            # usbl_df = self.get_usbl_data()
+            # df_copy = self.df
+
+            # interpolate together
+            # df_copy = df_copy.merge(usbl_df)
+
+            # display
+            fig = px.scatter(self.df, x=self.df.index, y=self.df[vtarg])
+            return(fig, fig)
+
         app.run(debug=True)
 
-        # set displays and layout
-
-        # write data to the displays
-
-        # refresh
-        self.animate()
-    
-    def _create_layout(self):
-        """Create the dashboard scene."""
-        self.value="Oxygen"
-        layout = html.Div([html.H1(children="Sentry Dashboard", style={"textAlign": "center"}),
-                               dcc.Dropdown(self.df.columns.unique(), self.value, id="dropdown-selection"),
-                               dcc.Graph(id="graph-content"),
-                               dcc.Interval(id="graph-update", interval=1*1000, n_intervals=0)])
+    def _create_app_layout(self):
+        """Creates the overall app layout."""
+        layout = html.Div([html.Div([html.Div(dcc.Link(
+            f"{page['name']}", href=page["relative_path"])) for page in dash.page_registry.values()]), dash.page_container, ])
         return(layout)
-    
-    def get_sentry_data(self):
-        """Read in the data from the datafile."""
-        pass
+
+    def _create_timeseries_layout(self):
+        """Create the dashboard scene."""
+        layout = html.Div([html.H1(children="Sentry Dashboard", style={"textAlign": "center"}),
+                           dcc.Graph(id="graph-content-oxygen"),
+                           dcc.Graph(id="graph-content-turbidity"),
+                           dcc.Graph(id="graph-content-orp"),
+                           dcc.Graph(id="graph-content-temperature"),
+                           dcc.Graph(id="graph-content-salinity"),
+                           dcc.Graph(id="graph-content-depth"),
+                           dcc.Interval(id="graph-update", interval=1*1000, n_intervals=0)])
+        return(layout)
+
+    def _create_threshold_layout(self):
+        """Create the ability to examine thresholds in a dashboard."""
+        layout = dbc.Container([dbc.Row([html.Div(children=[html.H1(children="Thresholds Dashboard", style={"textAlign": "center"})]),
+                                         html.Div(children=["Select x variable:",
+                                                            dcc.Dropdown(self.df.columns.unique(), "Oxygen", id="x-axis-selection")]),
+                                         html.Div(children=["Select y variable:",
+                                                            dcc.Dropdown(self.df.columns.unique(), "Turbidity", id="y-axis-selection")],
+                                                  style={'margin-top': 20}),
+                                         html.Div(children=["Set anomaly detection threshold (standard deviations):",
+                                                            dcc.Slider(0, 4, 0.5, value=1,
+                                                                       tooltip={
+                                                                           "placement": "bottom", "always_visible": True},
+                                                                       id="anomaly-control")],
+                                                  style={'margin-top': 20})]),
+                                dbc.Row([dbc.Col([dcc.Graph(id="graph-content-correlations", style={'width': '45vw', 'height': '60vh'})]),
+                                         dbc.Col([dcc.Graph(id="graph-content-anomaly-x", style={'width': '50vw', 'height': '30vh'}),
+                                                  dcc.Graph(id="graph-content-anomaly-y", style={'width': '50vw', 'height': '30vh'})]), ], style={'display': 'flex'})], fluid=True)
+        return(layout)
+
+    def _create_map_layout(self):
+        """Create the map dashboard scene."""
+        layout = html.Div([html.H1(children="Map Dashboard", style={"textAlign": "center"}),
+                           html.Div(children=[html.Button("Toggle Bathy",
+                                                          id="bathy-toggle",
+                                                          n_clicks=0,
+                                                          style={"align": "center", "width": 100})]),
+                           html.Div(children=["Select variable to visualize:",
+                                              dcc.Dropdown(self.df.columns.unique(), "Oxygen", id="map-selection")], style={"margin-top": 20}),
+                           html.Div(children=[dcc.Graph(id="overhead-map")]),
+                           html.Div(children=[dcc.Graph(id="3d-map")])])
+        return(layout)
 
     def get_bathy_data(self):
         """Read in the data from a bathy file, if any."""
-        pass
-    
-    def animate(self):
-        """Callback for updated text."""
         pass

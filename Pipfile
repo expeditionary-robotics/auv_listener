@@ -12,6 +12,7 @@ pandas = "*"
 argparse = "*"
 bagpy = "*"
 dash = "*"
+dash-bootstrap-components = "*"
 
 [dev-packages]
 
