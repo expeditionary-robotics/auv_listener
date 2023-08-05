@@ -16,8 +16,14 @@ from plotter_utils import SentryDashboard
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--target", action="store", type=str,
-                        help="Read data from this file.",
+                        help="Read sentry data from this file.",
                         default="proc_science.txt")
+    parser.add_argument("-x", "--experimental", action="store", type=str,
+                        help="Read methane data from this file.",
+                        default="proc_experimental.txt")
+    parser.add_argument("-u", "--usbl", action="store", type=str,
+                        help="Read usbl data from this file.",
+                        default="proc_usbl.txt")
     parser.add_argument("-c", "--continuous", action="store", type=bool,
                         help="Whether to read data continuously.",
                         default=False)
@@ -28,9 +34,11 @@ if __name__ == '__main__':
     parse = parser.parse_args()
 
     # Parse commandline input
-    filename = parse.target
+    sentryname = parse.target
+    sensorname = parse.experimental
+    usblname = parse.usbl
     bathyname = parse.bathy
     liveplot = parse.continuous
 
     # Create the dashboard
-    tp = SentryDashboard(filename, bathyname, liveplot)
+    tp = SentryDashboard(sentryname, sensorname, usblname, bathyname, liveplot)

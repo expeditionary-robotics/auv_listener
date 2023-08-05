@@ -383,17 +383,23 @@ class LiveSpatialPlot(Live2DPlot):
 class SentryDashboard(object):
     """Creates a plotly dashboard that updates with streamed data."""
 
-    def __init__(self, datafile, bathyfile, liveplot):
-        self.datafile = datafile
+    def __init__(self, sentryfile, sensorfile, usblfile, bathyfile, liveplot):
+        self.datafile = sentryfile
+        self.sensorfile = sensorfile
+        self.usblfile = usblfile
         self.bathyfile = bathyfile
         self.liveplot = liveplot
 
-        # read in the continuous data and set timing loop if we are liveplotting
-        self.df = pd.read_csv(self.datafile, sep=",", header=None, names=[
-                              "Time", "Oxygen", "Turbidity", "ORP", "Temperature", "Salinity", "Depth"])
-        self.df["Time"] = pd.to_datetime(self.df["Time"], utc=True)
-        self.df = self.df.set_index("Time").sort_index()
+        # read in the initial sentry science and extra sensor data
+        self.df = self.read_and_combine_dataframes(include_location=False)
 
+        # cache the bathy underlay in memory
+        self.bathy = self.get_bathy_data()
+        # TODO create cached bathy plot objects for occasional rendering
+        # self.bathy_2dplot = None
+        # self.bathy_3dplot = None
+
+        # create the dash app and register layout
         app = Dash(__name__, use_pages=True, pages_folder="",
                    external_stylesheets=[dbc.themes.BOOTSTRAP])
         dash.register_page(
@@ -404,6 +410,9 @@ class SentryDashboard(object):
 
         app.layout = self._create_app_layout()
 
+        # create dashboard callbacks
+
+        # callback for main page/autorefreshing timelines
         @callback(Output("graph-content-oxygen", "figure"),
                   Output("graph-content-turbidity", "figure"),
                   Output("graph-content-orp", "figure"),
@@ -412,10 +421,7 @@ class SentryDashboard(object):
                   Output("graph-content-depth", "figure"),
                   Input("graph-update", "n_intervals"))
         def stream(n):
-            self.df = pd.read_csv(self.datafile, sep=",", header=None, names=[
-                                  "Time", "Oxygen", "Turbidity", "ORP", "Temperature", "Salinity", "Depth"])
-            self.df["Time"] = pd.to_datetime(self.df["Time"], utc=True)
-            self.df = self.df.set_index("Time").sort_index()
+            self.df = self.read_and_combine_dataframes(include_location=False)
             figo2 = px.line(self.df, x=self.df.index, y=self.df.Oxygen)
             figo2.update_layout(uirevision=True)
             figturb = px.line(self.df, x=self.df.index, y=self.df.Turbidity)
@@ -430,6 +436,7 @@ class SentryDashboard(object):
             figdepth.update_layout(uirevision=True)
             return(figo2, figturb, figorp, figtemp, figsalt, figdepth)
 
+        # callback for correlations/threshold examination page
         @callback(Output("graph-content-correlations", "figure"),
                   Output("graph-content-anomaly-x", "figure"),
                   Output("graph-content-anomaly-y", "figure"),
@@ -438,9 +445,11 @@ class SentryDashboard(object):
                   Input("anomaly-control", "value"))
         def plot_thresholds(xval, yval, sdscale):
             # compute standard deviation and mean
-            df_copy = self.df
+            df_copy = self.df  # just get the current copy, no need to recompute latest
             xvalmean, xvalstd = df_copy[xval].mean(), df_copy[xval].std()
             yvalmean, yvalstd = df_copy[yval].mean(), df_copy[yval].std()
+
+            # classify data based on standard deviation threshold
             df_copy.loc[:, f"{xval}_meandiff"] = df_copy.apply(
                 lambda x: np.fabs(x[xval] - xvalmean), axis=1)
             df_copy.loc[:,
@@ -452,9 +461,9 @@ class SentryDashboard(object):
             df_copy.loc[:, f"anomaly_correspondence"] = df_copy[f"{yval}_outside"].astype(
                 float) + df_copy[f"{xval}_outside"].astype(float)
 
+            # create plots
             fig = px.scatter(df_copy, x=xval, y=yval, color="anomaly_correspondence", marginal_x="violin",
                              marginal_y="violin")
-            # fig.update_yaxes(scaleanchor="x", scaleratio=1)
             fig.update_layout(uirevision=True)
 
             scatx = px.scatter(df_copy, x=df_copy.index,
@@ -463,28 +472,16 @@ class SentryDashboard(object):
                                y=yval, color=f"{yval}_outside")
             return(fig, scatx, scaty)
         
-
+        # callback for map rendering page
         @callback(Output("overhead-map", "figure"),
                   Output("3d-map", "figure"),
-                  Input("map-selection", "value"),
-                  State("bathy-toggle", "value"))
+                  Input("map-selection", "value"))
         def plot_maps(vtarg, nclicks):
             """Render the maps on the maps page."""
-            # get the bathy underlay
-            # if nclicks % 2 == 0:
-            #     figs2D = []
-            #     figs3D = []
-            # else:
-            #     bathy = self.get_bathy_data()
-            #     figs2d = [px.scatter(bathy, x="lat", y="lon")]
-            #     figs3d = [px.scatter3d(bathy, x="lat", y="lon", z="depth")]
+            # TODO finish this function
 
             # get the usbl data
-            # usbl_df = self.get_usbl_data()
-            # df_copy = self.df
-
-            # interpolate together
-            # df_copy = df_copy.merge(usbl_df)
+            map_df = self.read_and_combine_dataframes(include_location=True)
 
             # display
             fig = px.scatter(self.df, x=self.df.index, y=self.df[vtarg])
@@ -532,10 +529,6 @@ class SentryDashboard(object):
     def _create_map_layout(self):
         """Create the map dashboard scene."""
         layout = html.Div([html.H1(children="Map Dashboard", style={"textAlign": "center"}),
-                           html.Div(children=[html.Button("Toggle Bathy",
-                                                          id="bathy-toggle",
-                                                          n_clicks=0,
-                                                          style={"align": "center", "width": 100})]),
                            html.Div(children=["Select variable to visualize:",
                                               dcc.Dropdown(self.df.columns.unique(), "Oxygen", id="map-selection")], style={"margin-top": 20}),
                            html.Div(children=[dcc.Graph(id="overhead-map")]),
@@ -545,3 +538,26 @@ class SentryDashboard(object):
     def get_bathy_data(self):
         """Read in the data from a bathy file, if any."""
         pass
+    
+    def read_and_combine_dataframes(self, include_location=False):
+        """Helper to constantly create new DF objects for plotting."""
+        if include_location is False:
+            # combine only the sentry and sensor dataframes
+            df = pd.read_csv(self.datafile, sep=",", header=None, names=[
+                              "Time", "Oxygen", "Turbidity", "ORP", "Temperature", "Salinity", "Depth"])
+            df["Time"] = pd.to_datetime(df["Time"], utc=True)
+            df = df.set_index("Time").sort_index()
+
+            # TODO add the logic to read in the methane sensor data
+            # self.sensor = pd.read_csv(self.sensorfile, sep=",", header=None, names=["Time", "Methane"])
+            # self.sensor["Time"] = pd.to_datetime(self.sensor["Time"], utc=True)
+            # self.sensor = self.sensor.set_index("Time").sort_index()
+
+            # TODO add the logic to interpolate the methane sensor data
+            # interpolate extra sensor data onto Sentry data
+            # self.df = self.df.merge(self.sensor)
+        else:
+            # TODO add the logic to include the usbl location information
+            # combine all of the dataframes, using sentry as base
+            pass
+        return(df)  # return the single, combined dataframe
