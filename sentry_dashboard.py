@@ -23,7 +23,7 @@ if __name__ == '__main__':
                         default="proc_experimental.txt")
     parser.add_argument("-u", "--usbl", action="store", type=str,
                         help="Read usbl data from this file.",
-                        default="proc_usbl.txt")
+                        default="_usbl_sentry.txt")
     parser.add_argument("-c", "--continuous", action="store", type=bool,
                         help="Whether to read data continuously.",
                         default=False)

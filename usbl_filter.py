@@ -59,6 +59,7 @@ if __name__ == '__main__':
 
         # Populate data
         for line in parse_lines:
+            print(line)
             if len(line) == 0:
                 continue
             parse_usbl_payload(line,

@@ -1,14 +1,14 @@
 """Spoofs acoustic communications messages over UDP.
 
 Example usage: 
-python spoofer.py -i 127.0.0.1 -p 100 -f ./messages_to_spoof.txt -r 20
+python usbl_spoofer.py -i 127.0.0.1 -p 100 -f ./messages_to_spoof.txt -r 20
 Reads a messages_to_spoof.txt file line by line and publishes
 over the network 127.0.0.1 to port 100 every 20 seconds. 
 If file is not provided random message formats are selected
 and populated from a utils file.
 
 Authors: Genevieve Flaspohler and Victoria Preston
-Update: August 2022
+Update: August 2023
 Contact: {geflaspo, vpreston}@mit.edu
 """
 
@@ -16,7 +16,7 @@ import argparse
 import socket
 import time
 import numpy as np
-from udp_utils import sentry_science_message, sentry_status_message, sage_message
+from udp_utils import usbl_message
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--ip", action="store",
@@ -49,7 +49,7 @@ if file is not None:
     num_lines = len(lines)
     while(1):
         realline = np.random.randint(0, num_lines)
-        msg = np.random.choice([lines[realline], sentry_science_message()])
+        msg = np.random.choice([lines[realline], usbl_message()])
         if len(msg) > 1:
             print(msg)
             MESSAGE = bytes(msg, encoding="utf8")
@@ -58,7 +58,7 @@ if file is not None:
 else:
     while(1):
         msg = np.random.choice(
-            [sentry_status_message(), sentry_science_message(), sage_message()])
+            [usbl_message()])
         print(msg)
         sock.sendto(bytes(msg, encoding='utf8'), (ACOMMS_IP, ACOMMS_PORT))
         time.sleep(ACOMMS_PUB_RATE)

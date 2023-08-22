@@ -7,6 +7,7 @@ Contact: {geflaspo, vpreston}@mit.edu
 
 import os
 import time
+import utm
 import pandas as pd
 import numpy as np
 
@@ -395,9 +396,13 @@ class SentryDashboard(object):
 
         # cache the bathy underlay in memory
         self.bathy = self.get_bathy_data()
-        # TODO create cached bathy plot objects for occasional rendering
-        # self.bathy_2dplot = None
-        # self.bathy_3dplot = None
+        self.bathy_3dplot = go.Mesh3d(x=self.bathy.lon[0::50],
+                                      y=self.bathy.lat[0::50],
+                                      z=self.bathy.depth[0::50],
+                                      intensity=self.bathy.depth[0::50],
+                                      colorscale='Viridis',
+                                      opacity=0.50,
+                                      name="Bathy")
 
         # create the dash app and register layout
         app = Dash(__name__, use_pages=True, pages_folder="",
@@ -418,6 +423,7 @@ class SentryDashboard(object):
                   Output("graph-content-orp", "figure"),
                   Output("graph-content-temperature", "figure"),
                   Output("graph-content-salinity", "figure"),
+                  Output("graph-content-methane", "figure"),
                   Output("graph-content-depth", "figure"),
                   Input("graph-update", "n_intervals"))
         def stream(n):
@@ -432,9 +438,11 @@ class SentryDashboard(object):
             figtemp.update_layout(uirevision=True)
             figsalt = px.line(self.df, x=self.df.index, y=self.df.Salinity)
             figsalt.update_layout(uirevision=True)
+            figmethane = px.line(self.df, x=self.df.index, y=self.df.methane_ppm)
+            figmethane.update_layout(uirevision=True)
             figdepth = px.line(self.df, x=self.df.index, y=self.df.Depth)
             figdepth.update_layout(uirevision=True)
-            return(figo2, figturb, figorp, figtemp, figsalt, figdepth)
+            return(figo2, figturb, figorp, figtemp, figsalt, figmethane, figdepth)
 
         # callback for correlations/threshold examination page
         @callback(Output("graph-content-correlations", "figure"),
@@ -471,21 +479,31 @@ class SentryDashboard(object):
             scaty = px.scatter(df_copy, x=df_copy.index,
                                y=yval, color=f"{yval}_outside")
             return(fig, scatx, scaty)
-        
-        # callback for map rendering page
-        @callback(Output("overhead-map", "figure"),
-                  Output("3d-map", "figure"),
-                  Input("map-selection", "value"))
-        def plot_maps(vtarg, nclicks):
-            """Render the maps on the maps page."""
-            # TODO finish this function
 
-            # get the usbl data
+        # callback for map rendering page
+        @callback(Output("3d-map", "figure"),
+                  Input("map-selection", "value"))
+        def plot_maps(vtarg):
+            """Render the maps on the maps page."""
+            # get the usbl relevant data
             map_df = self.read_and_combine_dataframes(include_location=True)
 
-            # display
-            fig = px.scatter(self.df, x=self.df.index, y=self.df[vtarg])
-            return(fig, fig)
+            # 3D display
+            figs_3d = [self.bathy_3dplot]
+            figs_3d.append(go.Scatter3d(x=map_df['lon'],
+                                        y=map_df['lat'],
+                                        z=map_df['depth'],
+                                        mode="markers",
+                                        marker=dict(size=2,
+                                                    color=map_df[vtarg],
+                                                    opacity=0.7,
+                                                    colorscale="Inferno",
+                                                    cmin=np.nanpercentile(map_df[vtarg], 10),
+                                                    cmax=np.nanpercentile(map_df[vtarg], 90),
+                                                    colorbar=dict(thickness=30, x=-0.1)),))
+            fig_3d = go.Figure(data=figs_3d, layout_title_text=f"{vtarg}")
+            fig_3d.update_layout(uirevision=True)
+            return(fig_3d)
 
         app.run(debug=True)
 
@@ -503,8 +521,9 @@ class SentryDashboard(object):
                            dcc.Graph(id="graph-content-orp"),
                            dcc.Graph(id="graph-content-temperature"),
                            dcc.Graph(id="graph-content-salinity"),
+                           dcc.Graph(id="graph-content-methane"),
                            dcc.Graph(id="graph-content-depth"),
-                           dcc.Interval(id="graph-update", interval=1*1000, n_intervals=0)])
+                           dcc.Interval(id="graph-update", interval=5*1000, n_intervals=0)])
         return(layout)
 
     def _create_threshold_layout(self):
@@ -531,33 +550,67 @@ class SentryDashboard(object):
         layout = html.Div([html.H1(children="Map Dashboard", style={"textAlign": "center"}),
                            html.Div(children=["Select variable to visualize:",
                                               dcc.Dropdown(self.df.columns.unique(), "Oxygen", id="map-selection")], style={"margin-top": 20}),
-                           html.Div(children=[dcc.Graph(id="overhead-map")]),
-                           html.Div(children=[dcc.Graph(id="3d-map")])])
+                           html.Div(children=[dcc.Graph(id="3d-map", style={'height': '90vh'})])])
         return(layout)
 
     def get_bathy_data(self):
         """Read in the data from a bathy file, if any."""
-        pass
-    
+        bathy_df = pd.read_table(self.bathyfile, names=[
+            "lon", "lat", "depth"]).dropna()
+        eb, nb, _, _ = utm.from_latlon(
+            bathy_df.lat.values, bathy_df.lon.values)
+        bathy_df.loc[:, "northing"] = nb
+        bathy_df.loc[:, "easting"] = eb
+        return bathy_df
+
     def read_and_combine_dataframes(self, include_location=False):
         """Helper to constantly create new DF objects for plotting."""
-        if include_location is False:
-            # combine only the sentry and sensor dataframes
-            df = pd.read_csv(self.datafile, sep=",", header=None, names=[
-                              "Time", "Oxygen", "Turbidity", "ORP", "Temperature", "Salinity", "Depth"])
-            df["Time"] = pd.to_datetime(df["Time"], utc=True)
-            df = df.set_index("Time").sort_index()
+        # combine only the sentry and sensor dataframes
+        df = pd.read_csv(self.datafile, sep=",", header=None, names=[
+            "Time", "Oxygen", "Turbidity", "ORP", "Temperature", "Salinity", "Depth"])
+        df["Time"] = pd.to_datetime(df["Time"])
+        df.loc[:, "t"] = (
+            df["Time"] - pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
 
-            # TODO add the logic to read in the methane sensor data
-            # self.sensor = pd.read_csv(self.sensorfile, sep=",", header=None, names=["Time", "Methane"])
-            # self.sensor["Time"] = pd.to_datetime(self.sensor["Time"], utc=True)
-            # self.sensor = self.sensor.set_index("Time").sort_index()
+        # read in the methane sensor data
+        self.sensor = pd.read_table(self.sensorfile,
+                                    sep=",",
+                                    header=None,
+                                    names=["msgTime",
+                                           "sensorTime",
+                                           "onboardFileNum",
+                                           "methane_ppm",
+                                           "inletPressure_mbar",
+                                           "inletTemperature_C",
+                                           "housingPressure_mbar",
+                                           "waterTemperature_C",
+                                           "junctionTemperature_c",
+                                           "junctionHumidity_per",
+                                           "avgPDVolts",
+                                           "inletHeaterState",
+                                           "junctionHeaterState"])
+        self.sensor["methaneTime"] = pd.to_datetime(self.sensor["msgTime"])
+        self.sensor.loc[:, "t"] = (self.sensor["methaneTime"] -
+                                   pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
 
-            # TODO add the logic to interpolate the methane sensor data
-            # interpolate extra sensor data onto Sentry data
-            # self.df = self.df.merge(self.sensor)
+        # interpolate the methane sensor data onto the sentry data
+        merge_df = df.merge(self.sensor, how="outer", on="t")
+
+        if include_location is True:
+            # include the usbl location information
+            self.usbl = pd.read_table(self.usblfile, sep=",", header=None, names=[
+                "timestamp", "lat", "lon", "depth"])
+            self.usbl.loc[:, "usblTime"] = pd.to_datetime(self.usbl["timestamp"])
+            self.usbl.loc[:, "t"] = (
+                self.usbl["usblTime"] - pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
+            merge_df = merge_df.merge(self.usbl, how="outer", on="t")
         else:
-            # TODO add the logic to include the usbl location information
-            # combine all of the dataframes, using sentry as base
             pass
-        return(df)  # return the single, combined dataframe
+        
+        # index by time for consistency
+        merge_df = merge_df.sort_values(by="t")
+        merge_df = merge_df.drop_duplicates(subset=["t"], keep=False)
+        merge_df.loc[:, "Global_Time"] = pd.to_datetime(merge_df["t"], unit="s")
+        merge_df = merge_df.set_index("Global_Time")
+        merge_df = merge_df.interpolate(method="ffill")
+        return(merge_df)  # return the single, combined dataframe

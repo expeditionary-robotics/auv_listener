@@ -90,21 +90,25 @@ def parse_usbl_payload(message, file_targets, target_ids):
     VFR 2019/09/24 13:27:58.033 2 0 SOLN_USBL -125.079565 44.489675 -597.900 0.000 10 0.00 0.00
     """
     mess = str(message)
-    packets = mess.split(" ")
-    new_stamp = packets[1].replace("/", "-")  # standadize timestamp
+    info_data = mess.split("|")[1]
+    packets = info_data.split(" ")
+    timestamp = mess.split("|")[0]
     # extract relevant info
-    info = f"{new_stamp} {packets[2]},{packets[6]},{packets[7]},{packets[8]}"
+    info = f"{timestamp},{packets[6]},{packets[7]},{packets[8]}"
 
     if "VFR" in packets[0]:
         for ft, tid in zip (file_targets, target_ids):
-            if packets[4] == tid and ("USBL" in packets[5] or "SOLN_GPS0" in packets[5]):
-                if os.path.isfile(ft):
-                    mode = "a"
+            if "USBL" in str(packets[5]) or "GPS0" in str(packets[5]):
+                if packets[3] == str(tid):
+                    if os.path.isfile(ft):
+                        mode = "a"
+                    else:
+                        mode = "w+"
+                    with open(ft, mode) as rf:
+                        rf.write(f"{info}\n")
+                        rf.flush()
                 else:
-                    mode = "w+"
-                with open(ft, mode) as rf:
-                    rf.write(f"{info}\n")
-                    rf.flush()
+                    pass
             else:
                 pass
     else:
