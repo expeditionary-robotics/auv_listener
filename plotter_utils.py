@@ -599,7 +599,7 @@ class SentryDashboard(object):
         if include_location is True:
             # include the usbl location information
             self.usbl = pd.read_table(self.usblfile, sep=",", header=None, names=[
-                "timestamp", "lon", "lat", "depth"])
+                "timestamp", "lat", "lon", "depth"])
             self.usbl.loc[:, "usblTime"] = pd.to_datetime(self.usbl["timestamp"])
             self.usbl.loc[:, "t"] = (
                 self.usbl["usblTime"] - pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
