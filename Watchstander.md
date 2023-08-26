@@ -1,5 +1,4 @@
-README.md for Operating Science Watch Stand
-
+# README for Operating Science Watch Stand
 
 The dashboard in this repository is meant to assist with listening to and visualizing acoustic messages transmitted from AUV Sentry (i.e., the science queue) and from the USBL system. Functionality includes: 
 - listening to sentry-network UDP ports and logging data to file
@@ -63,9 +62,9 @@ The `sentry_filter` utility can create up to three new files called `proc_dive_{
 # Sentry Dashboard
 Finally, you can visualize the data by running the data dashboard using the following command:
 
-`python sentry_dashboard.py -t ./data/sentry/proc_dive_{divenum}_science.txt -x ./data/sentry/proc_dive_{divenum}_experimental.txt -u ./data/usbl/proc_usbl_{divenum}_sentry.txt -c -b path/to/bathy/file`
+`python sentry_dashboard.py -t ./data/sentry/proc_dive_{divenum}_science.txt -x ./data/sentry/proc_dive_{divenum}_experimental.txt -u ./data/usbl/proc_usbl_{divenum}_usbl_sentry.txt -b path/to/bathy/file`
 
-This points to the science data, experimental sensor data (if any), usbl data (if any), and a local bathy file for a mission on the computer. The `c` flag indicates that you would like the dashboard to be streaming, as opposed to static. 
+This points to the science data, experimental sensor data (if any), usbl data (if any), and a local bathy file for a mission on the computer. 
 
 To then see the dashboard, navigate to a browser (you *do not need to be connected to the internet, just the Sentry network*) and open `127.0.0.1:8050`. You should see the dashboard, and if in continuous mode, the home page should contain occasionally-updating timeseries data of all the sensors. 
 

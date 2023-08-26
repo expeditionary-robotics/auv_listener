@@ -418,31 +418,32 @@ class SentryDashboard(object):
         # create dashboard callbacks
 
         # callback for main page/autorefreshing timelines
-        @callback(Output("graph-content-oxygen", "figure"),
-                  Output("graph-content-turbidity", "figure"),
+        @callback(Output("graph-content-turbidity", "figure"),
                   Output("graph-content-orp", "figure"),
                   Output("graph-content-temperature", "figure"),
-                  Output("graph-content-salinity", "figure"),
                   Output("graph-content-methane", "figure"),
                   Output("graph-content-depth", "figure"),
+                  Output("graph-content-oxygen", "figure"),
+                  Output("graph-content-salinity", "figure"),
                   Input("graph-update", "n_intervals"))
         def stream(n):
-            self.df = self.read_and_combine_dataframes(include_location=False)
-            figo2 = px.line(self.df, x=self.df.index, y=self.df.Oxygen)
-            figo2.update_layout(uirevision=True)
-            figturb = px.line(self.df, x=self.df.index, y=self.df.Turbidity)
+            self.df = self.read_and_combine_dataframes(include_location=True)
+            figturb = px.line(self.df, x=self.df.index, y=self.df.Turbidity,  hover_data=["lat", "lon", "depth"])
             figturb.update_layout(uirevision=True)
-            figorp = px.line(self.df, x=self.df.index, y=self.df.ORP)
+            figorp = px.line(self.df, x=self.df.index, y=self.df.ORP, hover_data=["lat", "lon", "depth"])
             figorp.update_layout(uirevision=True)
-            figtemp = px.line(self.df, x=self.df.index, y=self.df.Temperature)
+            figtemp = px.line(self.df, x=self.df.index, y=self.df.Temperature, hover_data=["lat", "lon", "depth"])
             figtemp.update_layout(uirevision=True)
-            figsalt = px.line(self.df, x=self.df.index, y=self.df.Salinity)
-            figsalt.update_layout(uirevision=True)
-            figmethane = px.line(self.df, x=self.df.index, y=self.df.methane_ppm)
-            figmethane.update_layout(uirevision=True)
-            figdepth = px.line(self.df, x=self.df.index, y=self.df.Depth)
+            if self.sensorfile is not None:
+                figmethane = px.line(self.df, x=self.df.index, y=self.df.methane_ppm, hover_data=["lat", "lon", "depth"])
+                figmethane.update_layout(uirevision=True)
+            figdepth = px.line(self.df, x=self.df.index, y=self.df.Depth, hover_data=["lat", "lon", "depth"])
             figdepth.update_layout(uirevision=True)
-            return(figo2, figturb, figorp, figtemp, figsalt, figmethane, figdepth)
+            figo2 = px.line(self.df, x=self.df.index, y=self.df.Oxygen, hover_data=["lat", "lon", "depth"])
+            figo2.update_layout(uirevision=True)
+            figsalt = px.line(self.df, x=self.df.index, y=self.df.Salinity, hover_data=["lat", "lon", "depth"])
+            figsalt.update_layout(uirevision=True)
+            return(figturb, figorp, figtemp, figmethane, figdepth, figo2, figsalt)
 
         # callback for correlations/threshold examination page
         @callback(Output("graph-content-correlations", "figure"),
@@ -453,7 +454,7 @@ class SentryDashboard(object):
                   Input("anomaly-control", "value"))
         def plot_thresholds(xval, yval, sdscale):
             # compute standard deviation and mean
-            df_copy = self.df  # just get the current copy, no need to recompute latest
+            df_copy = self.read_and_combine_dataframes(include_location=True)
             xvalmean, xvalstd = df_copy[xval].mean(), df_copy[xval].std()
             yvalmean, yvalstd = df_copy[yval].mean(), df_copy[yval].std()
 
@@ -471,13 +472,13 @@ class SentryDashboard(object):
 
             # create plots
             fig = px.scatter(df_copy, x=xval, y=yval, color="anomaly_correspondence", marginal_x="violin",
-                             marginal_y="violin")
+                             marginal_y="violin", hover_data=["lat", "lon", "depth"])
             fig.update_layout(uirevision=True)
 
             scatx = px.scatter(df_copy, x=df_copy.index,
-                               y=xval, color=f"{xval}_outside")
+                               y=xval, color=f"{xval}_outside", hover_data=["lat", "lon", "depth"])
             scaty = px.scatter(df_copy, x=df_copy.index,
-                               y=yval, color=f"{yval}_outside")
+                               y=yval, color=f"{yval}_outside", hover_data=["lat", "lon", "depth"])
             return(fig, scatx, scaty)
 
         # callback for map rendering page
@@ -500,7 +501,9 @@ class SentryDashboard(object):
                                                     colorscale="Inferno",
                                                     cmin=np.nanpercentile(map_df[vtarg], 10),
                                                     cmax=np.nanpercentile(map_df[vtarg], 90),
-                                                    colorbar=dict(thickness=30, x=-0.1)),))
+                                                    colorbar=dict(thickness=30, x=-0.1)),
+                                        hovertext=map_df.index,
+                                        hoverinfo="name+x+y+z+text"))
             fig_3d = go.Figure(data=figs_3d, layout_title_text=f"{vtarg}")
             fig_3d.update_layout(uirevision=True)
             return(fig_3d)
@@ -516,14 +519,14 @@ class SentryDashboard(object):
     def _create_timeseries_layout(self):
         """Create the dashboard scene."""
         layout = html.Div([html.H1(children="Sentry Dashboard", style={"textAlign": "center"}),
-                           dcc.Graph(id="graph-content-oxygen"),
                            dcc.Graph(id="graph-content-turbidity"),
                            dcc.Graph(id="graph-content-orp"),
                            dcc.Graph(id="graph-content-temperature"),
-                           dcc.Graph(id="graph-content-salinity"),
                            dcc.Graph(id="graph-content-methane"),
                            dcc.Graph(id="graph-content-depth"),
-                           dcc.Interval(id="graph-update", interval=5*1000, n_intervals=0)])
+                           dcc.Graph(id="graph-content-oxygen"),
+                           dcc.Graph(id="graph-content-salinity"),
+                           dcc.Interval(id="graph-update", interval=30*1000, n_intervals=0)])
         return(layout)
 
     def _create_threshold_layout(self):
@@ -571,30 +574,34 @@ class SentryDashboard(object):
         df["Time"] = pd.to_datetime(df["Time"])
         df.loc[:, "t"] = (
             df["Time"] - pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
+        merge_df = df
 
         # read in the methane sensor data
-        self.sensor = pd.read_table(self.sensorfile,
-                                    sep=",",
-                                    header=None,
-                                    names=["msgTime",
-                                           "sensorTime",
-                                           "onboardFileNum",
-                                           "methane_ppm",
-                                           "inletPressure_mbar",
-                                           "inletTemperature_C",
-                                           "housingPressure_mbar",
-                                           "waterTemperature_C",
-                                           "junctionTemperature_c",
-                                           "junctionHumidity_per",
-                                           "avgPDVolts",
-                                           "inletHeaterState",
-                                           "junctionHeaterState"])
-        self.sensor["methaneTime"] = pd.to_datetime(self.sensor["msgTime"])
-        self.sensor.loc[:, "t"] = (self.sensor["methaneTime"] -
-                                   pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
+        if self.sensorfile is not None:
+            self.sensor = pd.read_table(self.sensorfile,
+                                        sep=",",
+                                        header=None,
+                                        names=["msgTime",
+                                            "sensorTime",
+                                            "onboardFileNum",
+                                            "methane_ppm",
+                                            "inletPressure_mbar",
+                                            "inletTemperature_C",
+                                            "housingPressure_mbar",
+                                            "waterTemperature_C",
+                                            "junctionTemperature_c",
+                                            "junctionHumidity_per",
+                                            "avgPDVolts",
+                                            "inletHeaterState",
+                                            "junctionHeaterState"])
+            self.sensor["methaneTime"] = pd.to_datetime(self.sensor["msgTime"])
+            self.sensor.loc[:, "t"] = (self.sensor["methaneTime"] -
+                                    pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
 
-        # interpolate the methane sensor data onto the sentry data
-        merge_df = df.merge(self.sensor, how="outer", on="t")
+            # interpolate the methane sensor data onto the sentry data
+            merge_df = df.merge(self.sensor, how="outer", on="t")
+        else:
+            pass
 
         if include_location is True:
             # include the usbl location information
