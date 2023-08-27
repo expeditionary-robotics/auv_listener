@@ -10,8 +10,9 @@ import time
 import utm
 import pandas as pd
 import numpy as np
+from scipy.interpolate import griddata
 
-from dash import Dash, html, dcc, callback, Output, Input, State
+from dash import Dash, html, dcc, callback, Output, Input
 import dash_bootstrap_components as dbc
 import dash
 import plotly.express as px
@@ -407,6 +408,21 @@ class SentryDashboard(object):
                                       colorscale='Viridis',
                                       opacity=0.50,
                                       name="Bathy")
+        lonmin, lonmax = self.bathy.lon.min(), self.bathy.lon.max()
+        latmin, latmax = self.bathy.lat.min(), self.bathy.lat.max()
+        xlon = np.linspace(lonmin, lonmax, 200)
+        ylat = np.linspace(latmin, latmax, 200)
+        xlon, ylat = np.meshgrid(xlon, ylat)
+        Z = griddata((self.bathy.lon, self.bathy.lat), self.bathy.depth, (xlon, ylat), method="cubic")
+        self.bathy_2dplot = go.Contour(x=xlon[0],
+                                  y=ylat[:, 0],
+                                  z=Z,
+                                  contours=dict(start=np.nanmin(
+                                       Z), end=np.nanmax(Z), size=100),
+                                  contours_coloring="lines",
+                                  colorscale="Greys_r",
+                                  line=dict(width=0.5),
+                                  name="Bathy")
 
         # create the dash app and register layout
         app = Dash(__name__, use_pages=True, pages_folder="",
@@ -416,6 +432,7 @@ class SentryDashboard(object):
         dash.register_page(
             "correlations", layout=self._create_threshold_layout())
         dash.register_page("map", layout=self._create_map_layout())
+        dash.register_page("map_time", layout=self._create_maptime_layout())
 
         app.layout = self._create_app_layout()
 
@@ -524,6 +541,37 @@ class SentryDashboard(object):
             fig_3d.update_layout(uirevision=True)
             return(fig_3d)
 
+        @callback(Output("graph-maptime-time", "figure"),
+                  Output("graph-maptime-map", "figure"),
+                  Input("maptime-selection", "value"),
+                  Input("graph-maptime-time", "hoverData"))
+        def plot_maptime(vtarg, hover):
+            """Render the map and timeline on the Map-time page."""
+            if vtarg is not None:
+                df = self.read_and_combine_dataframes(include_location=True)
+                tfig = px.line(df, x=df.index, y=df[vtarg],  hover_data=["lat", "lon", "depth"])
+                tfig.update_layout(uirevision=True)
+                mfig = go.Scatter(x=df.lon,
+                                  y=df.lat,
+                                  mode="markers",
+                                  marker=dict(size=3,
+                                              color=df[vtarg],
+                                              colorscale="Inferno",
+                                              colorbar=dict(
+                                                    thickness=20, x=-0.2, tickfont=dict(size=20))))
+            map_fig = [self.bathy_2dplot, mfig]
+            if hover is not None:
+                hdata = hover["points"][0]
+                print(hdata)
+                map_fig.append(go.Scatter(x=[float(hdata["customdata"][1])],
+                                    y=[float(hdata["customdata"][0])],
+                                    mode="markers",
+                                    marker=dict(size=20)))
+            final_map_fig = go.Figure(map_fig)
+            final_map_fig.update_yaxes(scaleanchor="x", scaleratio=1)
+            return(tfig, go.Figure(final_map_fig))
+            
+
         app.run(debug=True)
 
     def _create_app_layout(self):
@@ -549,7 +597,7 @@ class SentryDashboard(object):
         """Create the ability to examine thresholds in a dashboard."""
         layout = dbc.Container([dbc.Row([html.Div(children=[html.H1(children="Thresholds Dashboard", style={"textAlign": "center"})]),
                                          html.Div(children=["Select x variable:",
-                                                            dcc.Dropdown(self.df.columns.unique(), "Oxygen", id="x-axis-selection")]),
+                                                            dcc.Dropdown(self.df.columns.unique(), "Temperature", id="x-axis-selection")]),
                                          html.Div(children=["Select y variable:",
                                                             dcc.Dropdown(self.df.columns.unique(), "Turbidity", id="y-axis-selection")],
                                                   style={'margin-top': 20}),
@@ -568,8 +616,17 @@ class SentryDashboard(object):
         """Create the map dashboard scene."""
         layout = html.Div([html.H1(children="Map Dashboard", style={"textAlign": "center"}),
                            html.Div(children=["Select variable to visualize:",
-                                              dcc.Dropdown(self.df.columns.unique(), "Oxygen", id="map-selection")], style={"margin-top": 20}),
+                                              dcc.Dropdown(self.df.columns.unique(), "Turbidity", id="map-selection")], style={"margin-top": 20}),
                            html.Div(children=[dcc.Graph(id="3d-map", style={'height': '90vh'})])])
+        return(layout)
+
+    def _create_maptime_layout(self):
+        """Create a map and timeline with hover capabilities."""
+        layout = dbc.Container([dbc.Row([html.Div(children=[html.H1(children="Map-Time Dashboard", style={"textAlign": "center"})]),
+                                    html.Div(children=["Select variable:",
+                                                       dcc.Dropdown(self.df.columns.unique(), "Turbidity", id="maptime-selection")])]),
+                            dbc.Row([dbc.Col([dcc.Graph(id="graph-maptime-time", style={"width": "50vw", "height": "60vh"})]),
+                                     dbc.Col([dcc.Graph(id="graph-maptime-map", style={"width": "45vw", "height": "80vh"})]), ], style={"display": "flex"})], fluid=True)
         return(layout)
 
     def get_bathy_data(self):
