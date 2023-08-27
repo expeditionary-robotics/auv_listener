@@ -94,7 +94,7 @@ def sentry_status_message():
 def sentry_science_message():
     """Creates spoofed sentry science message."""
     parts = ["SMS>blah|",  # front matter
-             "SDQ 34:",  # queue_num
+             "SDQ 31:",  # queue_num
              str(round(random.random()*250, 2))+" ",  # o2
              str(round(random.random()*100, 2))+" ",  # obs
              str(round(random.random()*50, 2))+" ",  # orp

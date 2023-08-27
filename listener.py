@@ -20,7 +20,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--ip", action="store",
                         type=str, help="IP address of network.",
-                        default="")
+                        default="192.168.100.226")
     parser.add_argument("-p", "--port", action="store", type=str,
                         help="Port for listening.",
                         default="55904")

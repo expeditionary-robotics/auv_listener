@@ -387,7 +387,11 @@ class SentryDashboard(object):
     def __init__(self, sentryfile, sensorfile, usblfile, bathyfile, liveplot):
         self.datafile = sentryfile
         self.sensorfile = sensorfile
+        if self.sensorfile == 'None':
+            self.sensorfile = None
         self.usblfile = usblfile
+        if self.usblfile == 'None':
+            self.usblfile = None
         self.bathyfile = bathyfile
         self.liveplot = liveplot
 
@@ -428,20 +432,30 @@ class SentryDashboard(object):
                   Input("graph-update", "n_intervals"))
         def stream(n):
             self.df = self.read_and_combine_dataframes(include_location=True)
-            figturb = px.line(self.df, x=self.df.index, y=self.df.Turbidity,  hover_data=["lat", "lon", "depth"])
+            figturb = px.line(self.df, x=self.df.index, y=self.df.Turbidity,  hover_data=[
+                              "lat", "lon", "depth"])
             figturb.update_layout(uirevision=True)
-            figorp = px.line(self.df, x=self.df.index, y=self.df.ORP, hover_data=["lat", "lon", "depth"])
+            figorp = px.line(self.df, x=self.df.index,
+                             y=self.df.ORP, hover_data=["lat", "lon", "depth"])
             figorp.update_layout(uirevision=True)
-            figtemp = px.line(self.df, x=self.df.index, y=self.df.Temperature, hover_data=["lat", "lon", "depth"])
+            figtemp = px.line(self.df, x=self.df.index, y=self.df.Temperature, hover_data=[
+                              "lat", "lon", "depth"])
             figtemp.update_layout(uirevision=True)
             if self.sensorfile is not None:
-                figmethane = px.line(self.df, x=self.df.index, y=self.df.methane_ppm, hover_data=["lat", "lon", "depth"])
+                figmethane = px.line(self.df, x=self.df.index, y=self.df.methane_ppm, hover_data=[
+                                     "lat", "lon", "depth"])
                 figmethane.update_layout(uirevision=True)
-            figdepth = px.line(self.df, x=self.df.index, y=self.df.Depth, hover_data=["lat", "lon", "depth"])
+            else:
+                figmethane = px.line(x=self.df.index, y=np.zeros_like(self.df.t))
+                figmethane.update_layout(uirevision=True)
+            figdepth = px.line(self.df, x=self.df.index, y=self.df.Depth, hover_data=[
+                               "lat", "lon", "depth"])
             figdepth.update_layout(uirevision=True)
-            figo2 = px.line(self.df, x=self.df.index, y=self.df.Oxygen, hover_data=["lat", "lon", "depth"])
+            figo2 = px.line(self.df, x=self.df.index, y=self.df.Oxygen, hover_data=[
+                            "lat", "lon", "depth"])
             figo2.update_layout(uirevision=True)
-            figsalt = px.line(self.df, x=self.df.index, y=self.df.Salinity, hover_data=["lat", "lon", "depth"])
+            figsalt = px.line(self.df, x=self.df.index, y=self.df.Salinity, hover_data=[
+                              "lat", "lon", "depth"])
             figsalt.update_layout(uirevision=True)
             return(figturb, figorp, figtemp, figmethane, figdepth, figo2, figsalt)
 
@@ -499,8 +513,10 @@ class SentryDashboard(object):
                                                     color=map_df[vtarg],
                                                     opacity=0.7,
                                                     colorscale="Inferno",
-                                                    cmin=np.nanpercentile(map_df[vtarg], 10),
-                                                    cmax=np.nanpercentile(map_df[vtarg], 90),
+                                                    cmin=np.nanpercentile(
+                                                        map_df[vtarg], 10),
+                                                    cmax=np.nanpercentile(
+                                                        map_df[vtarg], 90),
                                                     colorbar=dict(thickness=30, x=-0.1)),
                                         hovertext=map_df.index,
                                         hoverinfo="name+x+y+z+text"))
@@ -582,42 +598,46 @@ class SentryDashboard(object):
                                         sep=",",
                                         header=None,
                                         names=["msgTime",
-                                            "sensorTime",
-                                            "onboardFileNum",
-                                            "methane_ppm",
-                                            "inletPressure_mbar",
-                                            "inletTemperature_C",
-                                            "housingPressure_mbar",
-                                            "waterTemperature_C",
-                                            "junctionTemperature_c",
-                                            "junctionHumidity_per",
-                                            "avgPDVolts",
-                                            "inletHeaterState",
-                                            "junctionHeaterState"])
+                                               "sensorTime",
+                                               "onboardFileNum",
+                                               "methane_ppm",
+                                               "inletPressure_mbar",
+                                               "inletTemperature_C",
+                                               "housingPressure_mbar",
+                                               "waterTemperature_C",
+                                               "junctionTemperature_c",
+                                               "junctionHumidity_per",
+                                               "avgPDVolts",
+                                               "inletHeaterState",
+                                               "junctionHeaterState"])
             self.sensor["methaneTime"] = pd.to_datetime(self.sensor["msgTime"])
             self.sensor.loc[:, "t"] = (self.sensor["methaneTime"] -
-                                    pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
+                                       pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
 
             # interpolate the methane sensor data onto the sentry data
             merge_df = df.merge(self.sensor, how="outer", on="t")
         else:
             pass
 
-        if include_location is True:
+        if include_location is True and self.usblfile is not None:
             # include the usbl location information
             self.usbl = pd.read_table(self.usblfile, sep=",", header=None, names=[
                 "timestamp", "lat", "lon", "depth"])
-            self.usbl.loc[:, "usblTime"] = pd.to_datetime(self.usbl["timestamp"])
+            self.usbl.loc[:, "usblTime"] = pd.to_datetime(
+                self.usbl["timestamp"])
             self.usbl.loc[:, "t"] = (
                 self.usbl["usblTime"] - pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
             merge_df = merge_df.merge(self.usbl, how="outer", on="t")
         else:
-            pass
-        
+            merge_df.loc[:, "lat"] = np.zeros_like(merge_df.t)
+            merge_df.loc[:, "lon"] = np.zeros_like(merge_df.t)
+            merge_df.loc[:, "depth"] = np.zeros_like(merge_df.t)
+
         # index by time for consistency
         merge_df = merge_df.sort_values(by="t")
-        merge_df = merge_df.drop_duplicates(subset=["t"], keep=False)
-        merge_df.loc[:, "Global_Time"] = pd.to_datetime(merge_df["t"], unit="s")
+        merge_df = merge_df.drop_duplicates(subset=["t"], keep="first")
+        merge_df.loc[:, "Global_Time"] = pd.to_datetime(
+            merge_df["t"], unit="s")
         merge_df = merge_df.set_index("Global_Time")
         merge_df = merge_df.interpolate(method="ffill")
         return(merge_df)  # return the single, combined dataframe

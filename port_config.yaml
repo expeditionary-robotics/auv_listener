@@ -1,8 +1,14 @@
 # Sentry information for filtering
-science_queue: 34
+science_queue: 31
 status_queue: 0
 methane_queue: 101
 
 # USBL information for filtering
 target_ids: [0, 1, 2, 5]
 target_names: ["sentry", "jason", "ship", "rosette"]
+
+
+# Sentry IP address : 192.168.100.226
+# Sentry Listening Port : 52466
+# USBL IP address : 192.168.100.226
+# USBL Listening Port : 59833
