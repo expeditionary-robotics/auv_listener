@@ -11,4 +11,6 @@ target_names: ["sentry", "jason", "ship", "rosette"]
 # Sentry IP address : 192.168.100.226
 # Sentry Listening Port : 52466
 # USBL IP address : 192.168.100.226
-# USBL Listening Port : 59833
+# USBL Listening Port : 52467
+
+# second 2 is ID in the VFR message

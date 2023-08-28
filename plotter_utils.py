@@ -413,16 +413,17 @@ class SentryDashboard(object):
         xlon = np.linspace(lonmin, lonmax, 200)
         ylat = np.linspace(latmin, latmax, 200)
         xlon, ylat = np.meshgrid(xlon, ylat)
-        Z = griddata((self.bathy.lon, self.bathy.lat), self.bathy.depth, (xlon, ylat), method="cubic")
+        Z = griddata((self.bathy.lon, self.bathy.lat),
+                     self.bathy.depth, (xlon, ylat), method="cubic")
         self.bathy_2dplot = go.Contour(x=xlon[0],
-                                  y=ylat[:, 0],
-                                  z=Z,
-                                  contours=dict(start=np.nanmin(
-                                       Z), end=np.nanmax(Z), size=100),
-                                  contours_coloring="lines",
-                                  colorscale="Greys_r",
-                                  line=dict(width=0.5),
-                                  name="Bathy")
+                                       y=ylat[:, 0],
+                                       z=Z,
+                                       contours=dict(start=np.nanmin(
+                                           Z), end=np.nanmax(Z), size=0.5),
+                                       contours_coloring="lines",
+                                       colorscale="Greys_r",
+                                       line=dict(width=0.5),
+                                       name="Bathy")
 
         # create the dash app and register layout
         app = Dash(__name__, use_pages=True, pages_folder="",
@@ -433,6 +434,9 @@ class SentryDashboard(object):
             "correlations", layout=self._create_threshold_layout())
         dash.register_page("map", layout=self._create_map_layout())
         dash.register_page("map_time", layout=self._create_maptime_layout())
+        if self.sensorfile is not None:
+            dash.register_page("sage_engineering",
+                               layout=self._create_SAGE_layout())
 
         app.layout = self._create_app_layout()
 
@@ -463,9 +467,10 @@ class SentryDashboard(object):
                                      "lat", "lon", "depth"])
                 figmethane.update_layout(uirevision=True)
             else:
-                figmethane = px.line(x=self.df.index, y=np.zeros_like(self.df.t))
+                figmethane = px.line(
+                    x=self.df.index, y=np.zeros_like(self.df.t))
                 figmethane.update_layout(uirevision=True)
-            figdepth = px.line(self.df, x=self.df.index, y=self.df.Depth, hover_data=[
+            figdepth = px.line(self.df, x=self.df.index, y=-self.df.Depth, hover_data=[
                                "lat", "lon", "depth"])
             figdepth.update_layout(uirevision=True)
             figo2 = px.line(self.df, x=self.df.index, y=self.df.Oxygen, hover_data=[
@@ -475,6 +480,35 @@ class SentryDashboard(object):
                               "lat", "lon", "depth"])
             figsalt.update_layout(uirevision=True)
             return(figturb, figorp, figtemp, figmethane, figdepth, figo2, figsalt)
+
+        # callback for SAGE engineering page
+        @callback(Output("graph-content-methaneppm", "figure"),
+                  Output("graph-content-inlettemp", "figure"),
+                  Output("graph-content-housingpressure", "figure"),
+                  Output("graph-content-junctionhumidity", "figure"),
+                  Input("sage-graph-update", "n_intervals"))
+        def plot_sage_engineering(n):
+            """Create streaming plots of the critical SAGE engineering data."""
+            sensor_df = self.read_sensorfile()
+            if sensor_df is not None:
+                figmethane = px.line(
+                    sensor_df, x=sensor_df.index, y=sensor_df.methane_ppm)
+                figmethane.update_layout(uirevision=True)
+                figtemp = px.line(sensor_df, x=sensor_df.index,
+                                y=sensor_df.inletTemperature_C)
+                figtemp.update_layout(uirevision=True)
+                figpressure = px.line(
+                    sensor_df, x=sensor_df.index, y=sensor_df.housingPressure_mbar)
+                figpressure.update_layout(uirevision=True)
+                fighumidity = px.line(
+                    sensor_df, x=sensor_df.index, y=sensor_df.junctionHumidity_per)
+                fighumidity.update_layout(uirevision=True)
+            else:
+                figmethane = go.Figure()
+                figtemp = go.Figure()
+                figpressure = go.Figure()
+                fighumidity = go.Figure()
+            return(figmethane, figtemp, figpressure, fighumidity)
 
         # callback for correlations/threshold examination page
         @callback(Output("graph-content-correlations", "figure"),
@@ -549,7 +583,8 @@ class SentryDashboard(object):
             """Render the map and timeline on the Map-time page."""
             if vtarg is not None:
                 df = self.read_and_combine_dataframes(include_location=True)
-                tfig = px.line(df, x=df.index, y=df[vtarg],  hover_data=["lat", "lon", "depth"])
+                tfig = px.line(df, x=df.index, y=df[vtarg],  hover_data=[
+                               "lat", "lon", "depth"])
                 tfig.update_layout(uirevision=True)
                 mfig = go.Scatter(x=df.lon,
                                   y=df.lat,
@@ -558,19 +593,18 @@ class SentryDashboard(object):
                                               color=df[vtarg],
                                               colorscale="Inferno",
                                               colorbar=dict(
-                                                    thickness=20, x=-0.2, tickfont=dict(size=20))))
+                                                  thickness=20, x=-0.2, tickfont=dict(size=20))))
             map_fig = [self.bathy_2dplot, mfig]
             if hover is not None:
                 hdata = hover["points"][0]
                 print(hdata)
                 map_fig.append(go.Scatter(x=[float(hdata["customdata"][1])],
-                                    y=[float(hdata["customdata"][0])],
-                                    mode="markers",
-                                    marker=dict(size=20)))
+                                          y=[float(hdata["customdata"][0])],
+                                          mode="markers",
+                                          marker=dict(size=20)))
             final_map_fig = go.Figure(map_fig)
             final_map_fig.update_yaxes(scaleanchor="x", scaleratio=1)
             return(tfig, go.Figure(final_map_fig))
-            
 
         app.run(debug=True)
 
@@ -591,6 +625,16 @@ class SentryDashboard(object):
                            dcc.Graph(id="graph-content-oxygen"),
                            dcc.Graph(id="graph-content-salinity"),
                            dcc.Interval(id="graph-update", interval=30*1000, n_intervals=0)])
+        return(layout)
+
+    def _create_SAGE_layout(self):
+        """Creates a SAGE engineering page."""
+        layout = html.Div([html.H1(children="SAGE Engineering Data", style={"textAlign": "center"}),
+                           dcc.Graph(id="graph-content-methaneppm"),
+                           dcc.Graph(id="graph-content-inlettemp"),
+                           dcc.Graph(id="graph-content-housingpressure"),
+                           dcc.Graph(id="graph-content-junctionhumidity"),
+                           dcc.Interval(id="sage-graph-update", interval=30*1000, n_intervals=0)])
         return(layout)
 
     def _create_threshold_layout(self):
@@ -623,16 +667,16 @@ class SentryDashboard(object):
     def _create_maptime_layout(self):
         """Create a map and timeline with hover capabilities."""
         layout = dbc.Container([dbc.Row([html.Div(children=[html.H1(children="Map-Time Dashboard", style={"textAlign": "center"})]),
-                                    html.Div(children=["Select variable:",
-                                                       dcc.Dropdown(self.df.columns.unique(), "Turbidity", id="maptime-selection")])]),
-                            dbc.Row([dbc.Col([dcc.Graph(id="graph-maptime-time", style={"width": "50vw", "height": "60vh"})]),
-                                     dbc.Col([dcc.Graph(id="graph-maptime-map", style={"width": "45vw", "height": "80vh"})]), ], style={"display": "flex"})], fluid=True)
+                                         html.Div(children=["Select variable:",
+                                                            dcc.Dropdown(self.df.columns.unique(), "Turbidity", id="maptime-selection")])]),
+                                dbc.Row([dbc.Col([dcc.Graph(id="graph-maptime-time", style={"width": "50vw", "height": "60vh"})]),
+                                         dbc.Col([dcc.Graph(id="graph-maptime-map", style={"width": "45vw", "height": "80vh"})]), ], style={"display": "flex"})], fluid=True)
         return(layout)
 
     def get_bathy_data(self):
         """Read in the data from a bathy file, if any."""
         bathy_df = pd.read_table(self.bathyfile, names=[
-            "lon", "lat", "depth"]).dropna()
+            "lon", "lat", "depth"], sep=",").dropna()
         eb, nb, _, _ = utm.from_latlon(
             bathy_df.lat.values, bathy_df.lon.values)
         bathy_df.loc[:, "northing"] = nb
@@ -648,6 +692,7 @@ class SentryDashboard(object):
         df.loc[:, "t"] = (
             df["Time"] - pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
         merge_df = df
+        sentry_data_index = merge_df.t.values[0]
 
         # read in the methane sensor data
         if self.sensorfile is not None:
@@ -679,7 +724,7 @@ class SentryDashboard(object):
         if include_location is True and self.usblfile is not None:
             # include the usbl location information
             self.usbl = pd.read_table(self.usblfile, sep=",", header=None, names=[
-                "timestamp", "lat", "lon", "depth"])
+                "timestamp", "lon", "lat", "depth"])
             self.usbl.loc[:, "usblTime"] = pd.to_datetime(
                 self.usbl["timestamp"])
             self.usbl.loc[:, "t"] = (
@@ -693,8 +738,37 @@ class SentryDashboard(object):
         # index by time for consistency
         merge_df = merge_df.sort_values(by="t")
         merge_df = merge_df.drop_duplicates(subset=["t"], keep="first")
+        merge_df = merge_df[merge_df.t >= sentry_data_index]
         merge_df.loc[:, "Global_Time"] = pd.to_datetime(
             merge_df["t"], unit="s")
         merge_df = merge_df.set_index("Global_Time")
         merge_df = merge_df.interpolate(method="ffill")
         return(merge_df)  # return the single, combined dataframe
+
+    def read_sensorfile(self):
+        """Reads in a separate dataframe for sensor data."""
+        # read in the methane sensor data
+        if self.sensorfile is not None:
+            df = pd.read_table(self.sensorfile,
+                               sep=",",
+                               header=None,
+                               names=["msgTime",
+                                      "sensorTime",
+                                      "onboardFileNum",
+                                      "methane_ppm",
+                                      "inletPressure_mbar",
+                                      "inletTemperature_C",
+                                      "housingPressure_mbar",
+                                      "waterTemperature_C",
+                                      "junctionTemperature_c",
+                                      "junctionHumidity_per",
+                                      "avgPDVolts",
+                                      "inletHeaterState",
+                                      "jSunctionHeaterState"])
+            df["methaneTime"] = pd.to_datetime(df["msgTime"])
+            df.loc[:, "t"] = (df["methaneTime"] -
+                              pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
+            df = df.set_index("methaneTime")
+            return(df)
+        else:
+            return(None)

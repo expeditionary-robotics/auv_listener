@@ -99,7 +99,7 @@ def parse_usbl_payload(message, file_targets, target_ids):
     if "VFR" in packets[0]:
         for ft, tid in zip (file_targets, target_ids):
             if "USBL" in str(packets[5]) or "GPS0" in str(packets[5]):
-                if packets[3] == str(tid):
+                if packets[4] == str(tid):
                     if os.path.isfile(ft):
                         mode = "a"
                     else:

@@ -39,7 +39,7 @@ if __name__ == '__main__':
     filepath = parse.filepath
     name = parse.name
     raw_file = parse.target
-    queue_files = [os.path.join(filepath, f"{name}_usbl_{q}.txt")
+    queue_files = [os.path.join(filepath, f"{name}_{q}.txt")
                    for q in TARGET_NAMES]
 
     # Now parse the file target by polling and parsing any new lines
@@ -59,7 +59,7 @@ if __name__ == '__main__':
 
         # Populate data
         for line in parse_lines:
-            print(line)
+            # print(line)
             if len(line) == 0:
                 continue
             parse_usbl_payload(line,

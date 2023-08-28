@@ -90,8 +90,8 @@ if __name__ == '__main__':
                 mode = "a"
             else:
                 mode = "w+"
-            print(timestamp)
-            print(data)
+            # print(timestamp)
+            # print(data)
             with open(queue_files[qidx], mode) as rf:
                 rf.write(f"{timestamp+','+data}\n")
                 rf.flush()
