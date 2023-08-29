@@ -17,6 +17,7 @@ import dash_bootstrap_components as dbc
 import dash
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -441,11 +442,12 @@ class SentryDashboard(object):
         app = Dash(__name__, use_pages=True, pages_folder="",
                    external_stylesheets=[dbc.themes.BOOTSTRAP])
         dash.register_page(
-            "home", path="/", layout=self._create_timeseries_layout())
+            "home", path="/", layout=self._create_home_layout())
+        dash.register_page("extended_timeseries", layout=self._create_timeseries_layout())
         dash.register_page(
-            "correlations", layout=self._create_threshold_layout())
-        dash.register_page("map", layout=self._create_map_layout())
-        dash.register_page("map_time", layout=self._create_maptime_layout())
+            "simple_exploration", layout=self._create_threshold_layout())
+        dash.register_page("3D_map", layout=self._create_map_layout())
+        dash.register_page("overhead_map_with_time", layout=self._create_maptime_layout())
         if self.sensorfile is not None:
             dash.register_page("sage_engineering",
                                layout=self._create_SAGE_layout())
@@ -453,6 +455,23 @@ class SentryDashboard(object):
         app.layout = self._create_app_layout()
 
         # create dashboard callbacks
+
+        # callback for quickview home page with autorefresh timelines
+        @callback(Output("graph-home-quickview", "figure"),
+                  Input("graph-home-update", "n_intervals"))
+        def plot_quickview(n):
+            self.df = self.read_and_combine_dataframes(include_location=True)
+            time_plots = make_subplots(rows=7, cols=1, shared_xaxes=True, subplot_titles=["Turbidity", "ORP", "Depth", "Temperature", "Salinity", "Oxygen", "Methane"])
+            time_plots.add_trace(go.Scatter(x=self.df.index, y=self.df.Turbidity, mode="lines", name="Turbidity"), row=1, col=1)
+            time_plots.add_trace(go.Scatter(x=self.df.index, y=self.df.ORP, mode="lines", name="ORP"), row=2, col=1)
+            time_plots.add_trace(go.Scatter(x=self.df.index, y=self.df.Depth, mode="lines", name="Depth"), row=3, col=1)
+            time_plots.add_trace(go.Scatter(x=self.df.index, y=self.df.Temperature, mode="lines", name="Temperature"), row=4, col=1)
+            time_plots.add_trace(go.Scatter(x=self.df.index, y=self.df.Salinity, mode="lines", name="Salinity"), row=5, col=1)
+            time_plots.add_trace(go.Scatter(x=self.df.index, y=self.df.Oxygen, mode="lines", name="Oxygen"), row=6, col=1)
+            if self.sensorfile is not None:
+                time_plots.add_trace(go.Scatter(x=self.df.index, y=self.df.methane_ppm, mode="lines", name="Methane"), row=7, col=1)
+            time_plots.update_layout(height=800, uirevision=True, showlegend=False)
+            return(time_plots)
 
         # callback for main page/autorefreshing timelines
         @callback(Output("graph-content-turbidity", "figure"),
@@ -528,34 +547,43 @@ class SentryDashboard(object):
                   Output("graph-content-anomaly-y", "figure"),
                   Input("x-axis-selection", "value"),
                   Input("y-axis-selection", "value"),
+                  Input("c-axis-selection", "value"),
                   Input("anomaly-control", "value"))
-        def plot_thresholds(xval, yval, sdscale):
+        def plot_thresholds(xval, yval, cval, sdscale):
             # compute standard deviation and mean
             df_copy = self.read_and_combine_dataframes(include_location=True)
-            xvalmean, xvalstd = df_copy[xval].mean(), df_copy[xval].std()
-            yvalmean, yvalstd = df_copy[yval].mean(), df_copy[yval].std()
 
-            # classify data based on standard deviation threshold
-            df_copy.loc[:, f"{xval}_meandiff"] = df_copy.apply(
-                lambda x: np.fabs(x[xval] - xvalmean), axis=1)
-            df_copy.loc[:,
-                        f"{xval}_outside"] = (df_copy[f"{xval}_meandiff"] >= xvalstd * sdscale).astype(float)
-            df_copy.loc[:, f"{yval}_meandiff"] = df_copy.apply(
-                lambda x: np.fabs(x[yval] - yvalmean), axis=1)
-            df_copy.loc[:,
-                        f"{yval}_outside"] = (df_copy[f"{yval}_meandiff"] >= yvalstd * sdscale).astype(float)
-            df_copy.loc[:, f"anomaly_correspondence"] = df_copy[f"{yval}_outside"].astype(
-                float) + df_copy[f"{xval}_outside"].astype(float)
+            if cval == "Anomaly":
+                xvalmean, xvalstd = df_copy[xval].mean(), df_copy[xval].std()
+                yvalmean, yvalstd = df_copy[yval].mean(), df_copy[yval].std()
+
+                # classify data based on standard deviation threshold
+                df_copy.loc[:, f"{xval}_meandiff"] = df_copy.apply(
+                    lambda x: np.fabs(x[xval] - xvalmean), axis=1)
+                df_copy.loc[:,
+                            f"{xval}_outside"] = (df_copy[f"{xval}_meandiff"] >= xvalstd * sdscale).astype(float)
+                df_copy.loc[:, f"{yval}_meandiff"] = df_copy.apply(
+                    lambda x: np.fabs(x[yval] - yvalmean), axis=1)
+                df_copy.loc[:,
+                            f"{yval}_outside"] = (df_copy[f"{yval}_meandiff"] >= yvalstd * sdscale).astype(float)
+                df_copy.loc[:, f"Anomaly"] = df_copy[f"{yval}_outside"].astype(
+                    float) + df_copy[f"{xval}_outside"].astype(float)
 
             # create plots
             fig = px.scatter(df_copy, x=xval, y=yval, color="anomaly_correspondence", marginal_x="violin",
                              marginal_y="violin", hover_data=["lat", "lon", "Depth"])
             fig.update_layout(uirevision=True)
 
-            scatx = px.scatter(df_copy, x=df_copy.index,
-                               y=xval, color=f"{xval}_outside", hover_data=["lat", "lon", "Depth"])
-            scaty = px.scatter(df_copy, x=df_copy.index,
-                               y=yval, color=f"{yval}_outside", hover_data=["lat", "lon", "Depth"])
+            if cval == "Anomaly":
+                scatx = px.scatter(df_copy, x=df_copy.index,
+                                y=xval, color=f"{xval}_outside", hover_data=["lat", "lon", "depth"])
+                scaty = px.scatter(df_copy, x=df_copy.index,
+                                y=yval, color=f"{yval}_outside", hover_data=["lat", "lon", "depth"])
+            else:
+                scatx = px.scatter(df_copy, x=df_copy.index,
+                                y=xval, color=f"{cval}", hover_data=["lat", "lon", "depth"])
+                scaty = px.scatter(df_copy, x=df_copy.index,
+                                y=yval, color=f"{cval}", hover_data=["lat", "lon", "depth"])
             return(fig, scatx, scaty)
 
         # callback for map rendering page
@@ -590,8 +618,9 @@ class SentryDashboard(object):
         @callback(Output("graph-maptime-time", "figure"),
                   Output("graph-maptime-map", "figure"),
                   Input("maptime-selection", "value"),
-                  Input("graph-maptime-time", "hoverData"))
-        def plot_maptime(vtarg, hover):
+                  Input("graph-maptime-time", "hoverData"),
+                  Input("graph-maptime-map", "hoverData"))
+        def plot_maptime(vtarg, hovertime, hovermap):
             """Render the map and timeline on the Map-time page."""
             if vtarg is not None:
                 df = self.read_and_combine_dataframes(include_location=True)
@@ -604,16 +633,17 @@ class SentryDashboard(object):
                                   marker=dict(size=3,
                                               color=df[vtarg],
                                               colorscale="Inferno",
-                                              colorbar=dict(
-                                                  thickness=20, x=-0.2, tickfont=dict(size=20))))
-            map_fig = [self.bathy_2dplot, self.vents_plot, self.moorings_plot, mfig]
-            if hover is not None:
-                hdata = hover["points"][0]
+                                              colorbar=dict(thickness=20, x=-0.2, tickfont=dict(size=20))))
+            map_fig = [self.bathy_2dplot, mfig]
+            if hovertime is not None:
+                hdata = hovertime["points"][0]
                 print(hdata)
                 map_fig.append(go.Scatter(x=[float(hdata["customdata"][1])],
                                           y=[float(hdata["customdata"][0])],
                                           mode="markers",
-                                          marker=dict(size=20)))            
+                                          marker=dict(size=20)))
+            if hovermap is not None:
+                hdata = hovermap["points"][0]
             final_map_fig = go.Figure(map_fig)
             final_map_fig.update_yaxes(scaleanchor="x", scaleratio=1)
             return(tfig, go.Figure(final_map_fig))
@@ -623,12 +653,19 @@ class SentryDashboard(object):
     def _create_app_layout(self):
         """Creates the overall app layout."""
         layout = html.Div([html.Div([html.Div(dcc.Link(
-            f"{page['name']}", href=page["relative_path"])) for page in dash.page_registry.values()]), dash.page_container, ])
+            f"{page['name']}", href=page["relative_path"]), style={"display":"inline-block", "font-size":"24px", "padding":"1vh"}) for page in dash.page_registry.values()]), dash.page_container, ])
         return(layout)
 
+    def _create_home_layout(self):
+        """Create the small-timeseries viewer."""
+        layout = html.Div(children=[html.H1(children="Sentry Dash Quickview", style={"textAlign": "center"}),
+                                    dcc.Graph(id="graph-home-quickview"),
+                                    dcc.Interval(id="graph-home-update", interval=30*1000, n_intervals=0)])
+        return(layout)
+    
     def _create_timeseries_layout(self):
         """Create the dashboard scene."""
-        layout = html.Div([html.H1(children="Sentry Dashboard", style={"textAlign": "center"}),
+        layout = html.Div([html.H1(children="Extended Timeseries Dashboard", style={"textAlign": "center"}),
                            dcc.Graph(id="graph-content-turbidity"),
                            dcc.Graph(id="graph-content-orp"),
                            dcc.Graph(id="graph-content-depth"),
@@ -651,11 +688,14 @@ class SentryDashboard(object):
 
     def _create_threshold_layout(self):
         """Create the ability to examine thresholds in a dashboard."""
-        layout = dbc.Container([dbc.Row([html.Div(children=[html.H1(children="Thresholds Dashboard", style={"textAlign": "center"})]),
+        layout = dbc.Container([dbc.Row([html.Div(children=[html.H1(children="Simple Data Exploration Dashboard", style={"textAlign": "center"})]),
                                          html.Div(children=["Select x variable:",
                                                             dcc.Dropdown(self.df.columns.unique(), "Temperature", id="x-axis-selection")]),
                                          html.Div(children=["Select y variable:",
                                                             dcc.Dropdown(self.df.columns.unique(), "Turbidity", id="y-axis-selection")],
+                                                  style={'margin-top': 20}),
+                                         html.Div(children=["Select color variable:",
+                                                            dcc.Dropdown(self.df.columns.unique().to_list()+["Anomaly"], "Anomaly", id="c-axis-selection")],
                                                   style={'margin-top': 20}),
                                          html.Div(children=["Set anomaly detection threshold (standard deviations):",
                                                             dcc.Slider(0, 4, 0.5, value=1,
