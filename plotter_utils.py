@@ -570,7 +570,7 @@ class SentryDashboard(object):
                     float) + df_copy[f"{xval}_outside"].astype(float)
 
             # create plots
-            fig = px.scatter(df_copy, x=xval, y=yval, color="anomaly_correspondence", marginal_x="violin",
+            fig = px.scatter(df_copy, x=xval, y=yval, color=cval, marginal_x="violin",
                              marginal_y="violin", hover_data=["lat", "lon", "Depth"])
             fig.update_layout(uirevision=True)
 
