@@ -18,7 +18,7 @@ To run the dashboard locally (i.e., not on the "watchstander computer") you will
 7. Connect to the Sentry network, and make sure queue numbers and ports are correct per Sentry team configuration
 
 
-On either the watchstander computer or your own computer, the workflow to initialize will be:
+On either the watchstander computer or your own computer, the workflow to initialize from source will be:
 1. Enter into the pipenv environment with `pipenv shell` from the home directory of the repository
 2. Start the Sentry listener
 3. Start the USBL listener
@@ -26,8 +26,11 @@ On either the watchstander computer or your own computer, the workflow to initia
 5. Start the USBL message filter
 6. Start the dashboard
 
-Details below will explain each of these steps and common troubleshooting. At the end of the watch, kill all tabs with `Ctrl + C` in each terminal. You can kill everything but the dashboard if you would like to leave the data up for looking over. If you kill the dashboard, you can always get back the last session by relaunching the script.
+You can also use the convenience utility by:
+1. Enter into the pipenv environment with `pipenv shell` from the home directory of the repository.
+2. Run `./run_watchstation.sh` from the terminal and follow the prompts.
 
+Details below will explain each of these steps and common troubleshooting. At the end of the watch, kill all tabs with `Ctrl + C` in each terminal or just leave running and Victoria will deal with it. 
 
 # Sentry and USBL Listener
 The `listener.py` file defines a tool that will listen to a given UDP address and port, and log all of the messages received to a file. You can use the same code to listen to either the sentry or usbl messages as these two types of messages live on seperate ports. To run, you can type the following into the `pipenv shell` environment:
@@ -83,3 +86,5 @@ If that seems right and you are getting raw messages, but not filtered ones, che
 ## Data labels and actual data appear mis-aligned
 It may be the case that this in-development code made an error in parsing a given UDP message (for instance, switching the lat and the lon positions in the USBL messages). If you can diagnose what has been switched around, please consider updating the code in `plotter_utils.py` in the `Sentry_Dashboard` class, as well as any of the appropriate filter messages in `filter_utils.py` or `udp_utils.py`. 
 
+## Oh no! I closed the Dashboard!
+You might accidentally close Firefox without actually damaging the code -- simply re-open Firefox, and look up `127.0.0.1:8050` to get your dashboard screen back up!

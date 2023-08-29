@@ -2,9 +2,9 @@
 # Runs a specifed set of python commands to set up Sentry science watchstanding
 # Modify the top variables to set up repo/etc. properly
 
-SENTRY_LOG_NAME='dive_688'
-USBL_LOG_NAME='usbl_688'
-BATHY_FILE='./AT50-15/bathy_files/engineering_dive.txt'
+SENTRY_LOG_NAME='dive_684_onbottom'
+USBL_LOG_NAME='usbl_684_onbottom'
+BATHY_FILE='./AT50-15/bathy_files/dive_684.txt'
 
 IP_ADDRESS='192.168.100.226'
 # IP_ADDRESS='127.0.0.1'
