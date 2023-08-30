@@ -414,8 +414,7 @@ class SentryDashboard(object):
         xlon = np.linspace(lonmin, lonmax, 200)
         ylat = np.linspace(latmin, latmax, 200)
         xlon, ylat = np.meshgrid(xlon, ylat)
-        Z = griddata((self.bathy.lon, self.bathy.lat),
-                     self.bathy.depth, (xlon, ylat), method="cubic")
+        Z = griddata((self.bathy.lon, self.bathy.lat), self.bathy.depth, (xlon, ylat), method="cubic")
         self.bathy_2dplot = go.Contour(x=xlon[0],
                                        y=ylat[:, 0],
                                        z=Z,
@@ -454,7 +453,9 @@ class SentryDashboard(object):
 
         app.layout = self._create_app_layout()
 
+        ############
         # create dashboard callbacks
+        ############
 
         # callback for quickview home page with autorefresh timelines
         @callback(Output("graph-home-quickview", "figure"),
@@ -513,33 +514,22 @@ class SentryDashboard(object):
             return(figturb, figorp, figdepth, figtemp, figsalt, figo2, figmethane)
 
         # callback for SAGE engineering page
-        @callback(Output("graph-content-methaneppm", "figure"),
-                  Output("graph-content-inlettemp", "figure"),
-                  Output("graph-content-housingpressure", "figure"),
-                  Output("graph-content-junctionhumidity", "figure"),
+        @callback(Output("graph-content-sage", "figure"),
                   Input("sage-graph-update", "n_intervals"))
         def plot_sage_engineering(n):
             """Create streaming plots of the critical SAGE engineering data."""
             sensor_df = self.read_sensorfile()
+            time_plots = make_subplots(rows=4, cols=1, shared_xaxes=True, subplot_titles=["Methane", "Inlet Temperature (C)", "Housing Pressure (mbar)", "Junction Humidity (%)"])
+
             if sensor_df is not None:
-                figmethane = px.line(
-                    sensor_df, x=sensor_df.index, y=sensor_df.methane_ppm)
-                figmethane.update_layout(uirevision=True)
-                figtemp = px.line(sensor_df, x=sensor_df.index,
-                                y=sensor_df.inletTemperature_C)
-                figtemp.update_layout(uirevision=True)
-                figpressure = px.line(
-                    sensor_df, x=sensor_df.index, y=sensor_df.housingPressure_mbar)
-                figpressure.update_layout(uirevision=True)
-                fighumidity = px.line(
-                    sensor_df, x=sensor_df.index, y=sensor_df.junctionHumidity_per)
-                fighumidity.update_layout(uirevision=True)
-            else:
-                figmethane = go.Figure()
-                figtemp = go.Figure()
-                figpressure = go.Figure()
-                fighumidity = go.Figure()
-            return(figmethane, figtemp, figpressure, fighumidity)
+                time_plots.add_trace(go.Scatter(x=sensor_df.index, y=sensor_df.methane_ppm, mode="lines", name="Methane"), row=1, col=1)
+                time_plots.add_trace(go.Scatter(x=sensor_df.index, y=sensor_df.inletTemperature_C, mode="lines", name="Inlet Temperature"), row=2, col=1)
+                time_plots.add_trace(go.Scatter(x=sensor_df.index, y=sensor_df.housingPressure_mbar, mode="lines", name="Housing Pressure"), row=3, col=1)
+                time_plots.add_trace(go.Scatter(x=sensor_df.index, y=sensor_df.junctionHumidity_per, mode="lines", name="Junction Humidity"), row=4, col=1)
+           
+            time_plots.update_layout(height=800, uirevision=True, showlegend=False)
+            return(time_plots)
+
 
         # callback for correlations/threshold examination page
         @callback(Output("graph-content-correlations", "figure"),
@@ -576,14 +566,14 @@ class SentryDashboard(object):
 
             if cval == "Anomaly":
                 scatx = px.scatter(df_copy, x=df_copy.index,
-                                y=xval, color=f"{xval}_outside", hover_data=["lat", "lon", "depth"])
+                                y=xval, color=f"{xval}_outside", hover_data=["lat", "lon", "Depth"])
                 scaty = px.scatter(df_copy, x=df_copy.index,
-                                y=yval, color=f"{yval}_outside", hover_data=["lat", "lon", "depth"])
+                                y=yval, color=f"{yval}_outside", hover_data=["lat", "lon", "Depth"])
             else:
                 scatx = px.scatter(df_copy, x=df_copy.index,
-                                y=xval, color=f"{cval}", hover_data=["lat", "lon", "depth"])
+                                y=xval, color=f"{cval}", hover_data=["lat", "lon", "Depth"])
                 scaty = px.scatter(df_copy, x=df_copy.index,
-                                y=yval, color=f"{cval}", hover_data=["lat", "lon", "depth"])
+                                y=yval, color=f"{cval}", hover_data=["lat", "lon", "Depth"])
             return(fig, scatx, scaty)
 
         # callback for map rendering page
@@ -617,36 +607,52 @@ class SentryDashboard(object):
 
         @callback(Output("graph-maptime-time", "figure"),
                   Output("graph-maptime-map", "figure"),
+                  Output("maptime-slider", "min"),
+                  Output("maptime-slider", "max"),
                   Input("maptime-selection", "value"),
-                  Input("graph-maptime-time", "hoverData"),
-                  Input("graph-maptime-map", "hoverData"))
-        def plot_maptime(vtarg, hovertime, hovermap):
+                  Input("maptime-slider", "value"),
+                  Input("graph-maptime-map", "clickData"),
+                  Input("graph-maptime-time", "clickData"))
+        def plot_maptime(vtarg, sliders, hovermap, hovertime):
             """Render the map and timeline on the Map-time page."""
+            df = self.read_and_combine_dataframes(include_location=True)
+            slider_min = np.nanmin(df[vtarg])
+            slider_max = np.nanmax(df[vtarg])
             if vtarg is not None:
-                df = self.read_and_combine_dataframes(include_location=True)
-                tfig = px.line(df, x=df.index, y=df[vtarg],  hover_data=[
-                               "lat", "lon", "Depth"])
-                tfig.update_layout(uirevision=True)
+                tfig = go.Scatter(x=df.index, y=df[vtarg], mode="lines")
                 mfig = go.Scatter(x=df.lon,
                                   y=df.lat,
                                   mode="markers",
                                   marker=dict(size=3,
                                               color=df[vtarg],
                                               colorscale="Inferno",
-                                              colorbar=dict(thickness=20, x=-0.2, tickfont=dict(size=20))))
-            map_fig = [self.bathy_2dplot, mfig]
+                                              cmin=sliders[0],
+                                              cmax=sliders[1],
+                                              colorbar=dict(thickness=20,
+                                                            x=-0.2,
+                                                            tickfont=dict(size=20))))
+            map_fig = [self.bathy_2dplot, mfig]#self.vents_plot, self.moorings_plot, mfig]
+            time_fig = [tfig]
+            
             if hovertime is not None:
                 hdata = hovertime["points"][0]
                 print(hdata)
-                map_fig.append(go.Scatter(x=[float(hdata["customdata"][1])],
-                                          y=[float(hdata["customdata"][0])],
+                loc = df[(df.index == hdata["x"])]
+                map_fig.append(go.Scatter(x=loc.lon,
+                                          y=loc.lat,
                                           mode="markers",
                                           marker=dict(size=20)))
             if hovermap is not None:
                 hdata = hovermap["points"][0]
+                time = df[(df.lon == hdata["x"]) & (df.lat == hdata["y"])]
+                time_fig.append(go.Scatter(x=time.index, y=time[vtarg], mode="markers", marker=dict(size=10, color=['#EF553B'])))
+            
             final_map_fig = go.Figure(map_fig)
             final_map_fig.update_yaxes(scaleanchor="x", scaleratio=1)
-            return(tfig, go.Figure(final_map_fig))
+            final_time_fig = go.Figure(time_fig)
+            final_time_fig.update_layout(uirevision=True, showlegend=False)
+
+            return(final_time_fig, final_map_fig, slider_min, slider_max)
 
         app.run(debug=True)
 
@@ -679,10 +685,7 @@ class SentryDashboard(object):
     def _create_SAGE_layout(self):
         """Creates a SAGE engineering page."""
         layout = html.Div([html.H1(children="SAGE Engineering Data", style={"textAlign": "center"}),
-                           dcc.Graph(id="graph-content-methaneppm"),
-                           dcc.Graph(id="graph-content-inlettemp"),
-                           dcc.Graph(id="graph-content-housingpressure"),
-                           dcc.Graph(id="graph-content-junctionhumidity"),
+                           dcc.Graph(id="graph-content-sage"),
                            dcc.Interval(id="sage-graph-update", interval=30*1000, n_intervals=0)])
         return(layout)
 
@@ -720,7 +723,14 @@ class SentryDashboard(object):
         """Create a map and timeline with hover capabilities."""
         layout = dbc.Container([dbc.Row([html.Div(children=[html.H1(children="Map-Time Dashboard", style={"textAlign": "center"})]),
                                          html.Div(children=["Select variable:",
-                                                            dcc.Dropdown(self.df.columns.unique(), "Turbidity", id="maptime-selection")])]),
+                                                            dcc.Dropdown(self.df.columns.unique(), "Turbidity", id="maptime-selection")]),
+                                         html.Div(children=["Set rendering scale:",
+                                                            dcc.RangeSlider(np.nanmin(self.df.Turbidity),
+                                                                            np.nanmax(self.df.Turbidity),
+                                                                            value=[np.nanmin(self.df.Turbidity), np.nanmax(self.df.Turbidity)],
+                                                                            id='maptime-slider')],
+                                                            style={"margin-top": 20})
+                                        ]),
                                 dbc.Row([dbc.Col([dcc.Graph(id="graph-maptime-time", style={"width": "50vw", "height": "60vh"})]),
                                          dbc.Col([dcc.Graph(id="graph-maptime-map", style={"width": "45vw", "height": "80vh"})]), ], style={"display": "flex"})], fluid=True)
         return(layout)
