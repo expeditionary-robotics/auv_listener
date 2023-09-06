@@ -18,6 +18,7 @@ import dash
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import plotly.figure_factory as ff
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -386,7 +387,7 @@ class LiveSpatialPlot(Live2DPlot):
 class SentryDashboard(object):
     """Creates a plotly dashboard that updates with streamed data."""
 
-    def __init__(self, sentryfile, sensorfile, usblfile, bathyfile, liveplot):
+    def __init__(self, sentryfile, sensorfile, usblfile, bathyfile, currentfile, liveplot):
         self.datafile = sentryfile
         self.sensorfile = sensorfile
         if self.sensorfile == 'None':
@@ -394,6 +395,10 @@ class SentryDashboard(object):
         self.usblfile = usblfile
         if self.usblfile == 'None':
             self.usblfile = None
+        if currentfile == "None":
+            self.currentfile = None
+        else:
+            self.currentfile = currentfile
         self.bathyfile = bathyfile
         self.liveplot = liveplot
 
@@ -450,6 +455,8 @@ class SentryDashboard(object):
         if self.sensorfile is not None:
             dash.register_page("sage_engineering",
                                layout=self._create_SAGE_layout())
+        if self.currentfile is not None:
+            dash.register_page("ocean_currents_data", layout=self._create_current_layout())
 
         app.layout = self._create_app_layout()
 
@@ -654,6 +661,45 @@ class SentryDashboard(object):
 
             return(final_time_fig, final_map_fig, slider_min, slider_max)
 
+        
+        
+        @callback(Output("graph-content-currentmap", "figure"),
+                  Output("graph-content-currentx", "figure"),
+                  Output("graph-content-currenty", "figure"),
+                  Input("current-selection", "value"),
+                  Input("current-slider", "value"),
+                  Input("current-slider-time", "value"))
+        def plot_ocean_currents(vtarg, vtarg_lims, time_lims):
+            """Create the visualizations of ocean current from file."""
+            df = self.read_and_combine_dataframes(include_location=True)
+            df = df[(df.t >= time_lims[0]) & (df.t <= time_lims[1])]
+            quiv = ff.create_quiver(df.easting[::10], df.northing[::10], df.true_veast[::10], df.true_vnorth[::10], scale=5000, arrow_scale=0.1, name='quiver', line_width=1)
+            quiv.add_trace(go.Scatter(x=df.easting,
+                                y=df.northing,
+                                mode="markers",
+                                marker=dict(size=3,
+                                            color=df[vtarg],
+                                            colorscale="Inferno",
+                                            cmin=vtarg_lims[0],
+                                            cmax=vtarg_lims[1],
+                                            colorbar=dict(thickness=20,
+                                                        x=-0.2,
+                                                        tickfont=dict(size=20)))))
+            # quiv.add_trace(self.bathy_2dplot)
+            currentx_fig = go.Scatter(x=df.index,
+                                        y=df.true_veast,
+                                        mode="markers",
+                                        marker=dict(size=3))
+            currenty_fig = go.Scatter(x=df.index,
+                                        y=df.true_vnorth,
+                                        mode="markers",
+                                        marker=dict(size=3))
+            quiv.update_yaxes(scaleanchor="x", scaleratio=1)
+            quiv.update_layout(showlegend=False)
+            return(quiv, go.Figure([currentx_fig]), go.Figure([currenty_fig]))
+        
+        
+        
         app.run(debug=True)
 
     def _create_app_layout(self):
@@ -735,6 +781,30 @@ class SentryDashboard(object):
                                          dbc.Col([dcc.Graph(id="graph-maptime-map", style={"width": "45vw", "height": "80vh"})]), ], style={"display": "flex"})], fluid=True)
         return(layout)
 
+    def _create_current_layout(self):
+        """Create the layout for plotting current data over plotted points."""
+        layout = dbc.Container([dbc.Row([html.Div(children=[html.H1(children="Ocean Currents Dashboard", style={"textAlign": "center"})]),
+                                         html.Div(children=["Select variable:",
+                                                            dcc.Dropdown(self.df.columns.unique(), "Turbidity", id="current-selection")]),
+                                         html.Div(children=["Set rendering scale:",
+                                                            dcc.RangeSlider(np.nanmin(self.df.Turbidity),
+                                                                            np.nanmax(self.df.Turbidity),
+                                                                            value=[np.nanmin(self.df.Turbidity), np.nanmax(self.df.Turbidity)],
+                                                                            id='current-slider')],
+                                                            style={"margin-top": 20}),
+                                         html.Div(children=["Set times to display:",
+                                                            dcc.RangeSlider(self.df.t.min(),
+                                                                            self.df.t.max(),
+                                                                            value=[self.df.t.min(), self.df.t.max()],
+                                                                            marks={int(date) : {"label": str(pd.to_datetime(date, unit="s"))} for each, date in enumerate(self.df.t[::500])},
+                                                                            id='current-slider-time')],
+                                                            style={"margin-top": 20})
+                                        ]),
+                                dbc.Row([dbc.Col([dcc.Graph(id="graph-content-currentmap", style={'width': '45vw', 'height': '60vh'})]),
+                                         dbc.Col([dcc.Graph(id="graph-content-currentx", style={'width': '50vw', 'height': '30vh'}),
+                                                  dcc.Graph(id="graph-content-currenty", style={'width': '50vw', 'height': '30vh'})]), ], style={'display': 'flex'})], fluid=True)
+        return(layout)
+
     def get_bathy_data(self):
         """Read in the data from a bathy file, if any."""
         bathy_df = pd.read_table(self.bathyfile, names=[
@@ -797,6 +867,13 @@ class SentryDashboard(object):
             merge_df.loc[:, "lon"] = np.zeros_like(merge_df.t)
             merge_df.loc[:, "depth_usbl"] = np.zeros_like(merge_df.t)
 
+        if self.currentfile is not None:
+            df = pd.read_csv(self.currentfile,
+                             sep=",")
+            df = df[(df.t > merge_df.t.values[0]) & (df.t < merge_df.t.values[-1])]
+            merge_df = merge_df.merge(df, how="outer", on="t")
+            print(df.columns)
+
         # index by time for consistency
         merge_df = merge_df.sort_values(by="t")
         merge_df = merge_df.drop_duplicates(subset=["t"], keep="first")
@@ -805,6 +882,11 @@ class SentryDashboard(object):
             merge_df["t"], unit="s")
         merge_df = merge_df.set_index("Global_Time")
         merge_df = merge_df.interpolate(method="ffill")
+        if self.usblfile is not None:
+            merge_df = merge_df.dropna(subset=["lat", "lon"])
+            easting, northing, _, _ = utm.from_latlon(merge_df.lat.values, merge_df.lon.values)
+            merge_df.loc[:, "northing"] = northing
+            merge_df.loc[:, "easting"] = easting
         return(merge_df)  # return the single, combined dataframe
 
     def read_sensorfile(self):

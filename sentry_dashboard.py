@@ -30,6 +30,9 @@ if __name__ == '__main__':
     parser.add_argument("-b", "--bathy", action="store", type=str,
                         help="Read data for map underlay in this file.",
                         default="")
+    parser.add_argument("-o", "--current", action="store", type=str,
+                        help="Read data for current vectors.",
+                        default="None")
     # Create commandline parser
     parse = parser.parse_args()
 
@@ -38,7 +41,8 @@ if __name__ == '__main__':
     sensorname = parse.experimental
     usblname = parse.usbl
     bathyname = parse.bathy
+    currentname = parse.current
     liveplot = parse.continuous
 
     # Create the dashboard
-    tp = SentryDashboard(sentryname, sensorname, usblname, bathyname, liveplot)
+    tp = SentryDashboard(sentryname, sensorname, usblname, bathyname, currentname, liveplot)
