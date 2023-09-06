@@ -15,7 +15,7 @@ import os
 import yaml
 import argparse
 from filter_utils import filter_sentry_science_message, \
-    filter_sentry_status_message, filter_experimental_message, parse_sentry_payload
+    filter_sentry_status_message, filter_experimental_message, filter_supr_message, filter_mets_message, parse_sentry_payload
 
 # Globals which may need to change
 with open("port_config.yaml") as f:
@@ -23,6 +23,8 @@ with open("port_config.yaml") as f:
 STATUS_QUEUE = globes["status_queue"]
 SCIENCE_QUEUE = globes["science_queue"]
 METHANE_QUEUE = globes["methane_queue"]
+SUPR_QUEUE = globes["supr_queue"]
+METS_QUEUE = globes["mets_queue"]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -42,10 +44,12 @@ if __name__ == '__main__':
     name = parse.name
     filepath = parse.filepath
     raw_file = parse.target
-    queue_names = ["status", "science", "experimental"]
+    queue_names = ["status", "science", "experimental", "supr"]
     queue_filters = [filter_sentry_status_message,
                      filter_sentry_science_message,
-                     filter_experimental_message]
+                     filter_experimental_message,
+                     filter_supr_message,
+                     filter_mets_message]
     queue_files = [os.path.join(
         filepath, f"{name}_{q}.txt") for q in queue_names]
 
@@ -72,7 +76,9 @@ if __name__ == '__main__':
             msg_type, payload, timestamp = parse_sentry_payload(line,
                                                                 STATUS_QUEUE,
                                                                 SCIENCE_QUEUE,
-                                                                METHANE_QUEUE)
+                                                                METHANE_QUEUE,
+                                                                SUPR_QUEUE,
+                                                                METS_QUEUE)
 
             if msg_type is None:  # only care about certain queues
                 continue

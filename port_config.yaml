@@ -1,7 +1,9 @@
 # Sentry information for filtering
 science_queue: 31
 status_queue: 0
-methane_queue: 101
+methane_queue: 100  # for SAGE
+supr_queue: 62  # for supr
+mets_queue: 101  # for Mets
 
 # USBL information for filtering
 target_ids: [0, 1, 2, 5]

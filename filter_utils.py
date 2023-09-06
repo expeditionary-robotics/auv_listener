@@ -56,8 +56,17 @@ def filter_experimental_message(message):
     """Stand-in function for experimental sensors parsed in queue."""
     return str(message)
 
+def filter_supr_message(message):
+    """Stand-in function for supr sensors parsed in queue."""
+    return str(message)
 
-def parse_sentry_payload(message, status_queue, science_queue, experimental_queue):
+
+def filter_mets_message(message):
+    """Stand-in function for supr sensors parsed in queue."""
+    return str(message)
+
+
+def parse_sentry_payload(message, status_queue, science_queue, experimental_queue, supr_queue, mets_queue):
     """Inspects the message and returns the message type.
     One of "status", "science", "experimental", or None
     Provide the message and queue targets for status, science, and experimental.
@@ -79,6 +88,10 @@ def parse_sentry_payload(message, status_queue, science_queue, experimental_queu
             return "science", payload, timestamp
         elif queue == experimental_queue:
             return "experimental", payload, timestamp
+        elif queue == supr_queue:
+            return "supr", payload, timestamp
+        elif queue == mets_queue:
+            return "mets", payload, timestamp
         else:
             return None, message, timestamp
     except:
