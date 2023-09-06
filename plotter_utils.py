@@ -719,11 +719,13 @@ class SentryDashboard(object):
                   Output("maptime-slider", "max"),
                   Input("maptime-selection", "value"),
                   Input("maptime-slider", "value"),
+                  Input("maptime-slider-time", "value"),
                   Input("graph-maptime-map", "clickData"),
                   Input("graph-maptime-time", "clickData"))
-        def plot_maptime(vtarg, sliders, hovermap, hovertime):
+        def plot_maptime(vtarg, sliders, time_lims, hovermap, hovertime):
             """Render the map and timeline on the Map-time page."""
             df = self.read_and_combine_dataframes(include_location=True)
+            df = df[(df.t >= time_lims[0]) & (df.t <= time_lims[1])]
             slider_min = np.nanmin(df[vtarg])
             slider_max = np.nanmax(df[vtarg])
             if vtarg is not None:
@@ -884,7 +886,14 @@ class SentryDashboard(object):
                                                                             value=[np.nanmin(self.df.Turbidity), np.nanmax(
                                                                                 self.df.Turbidity)],
                                                                             id='maptime-slider')],
-                                                  style={"margin-top": 20})
+                                                  style={"margin-top": 20}),
+                                         html.Div(children=["Set times to display:",
+                                                            dcc.RangeSlider(self.df.t.min(),
+                                                                            self.df.t.max(),
+                                                                            value=[self.df.t.min(), self.df.t.max()],
+                                                                            marks={int(date) : {"label": str(pd.to_datetime(date, unit="s"))} for each, date in enumerate(self.df.t[::500])},
+                                                                            id='maptime-slider-time')],
+                                                            style={"margin-top": 20})
                                          ]),
                                 dbc.Row([dbc.Col([dcc.Graph(id="graph-maptime-time", style={"width": "50vw", "height": "60vh"})]),
                                          dbc.Col([dcc.Graph(id="graph-maptime-map", style={"width": "45vw", "height": "80vh"})]), ], style={"display": "flex"})], fluid=True)
@@ -992,7 +1001,6 @@ class SentryDashboard(object):
                              sep=",")
             df = df[(df.t > merge_df.t.values[0]) & (df.t < merge_df.t.values[-1])]
             merge_df = merge_df.merge(df, how="outer", on="t")
-            print(df.columns)
 
         # index by time for consistency
         merge_df = merge_df.sort_values(by="t")
