@@ -24,25 +24,37 @@ if __name__ == '__main__':
     parser.add_argument("-u", "--usbl", action="store", type=str,
                         help="Read usbl data from this file.",
                         default="_usbl_sentry.txt")
-    parser.add_argument("-c", "--continuous", action="store", type=bool,
-                        help="Whether to read data continuously.",
-                        default=False)
     parser.add_argument("-b", "--bathy", action="store", type=str,
                         help="Read data for map underlay in this file.",
                         default="")
-    parser.add_argument("-o", "--current", action="store", type=str,
+    parser.add_argument("-c", "--current", action="store", type=str,
                         help="Read data for current vectors.",
                         default="None")
+    parser.add_argument("-m", "--mets", action="store", type=str,
+                        help="Read methane data from mets file.",
+                        default="None")
+    parser.add_argument("-o", "--backscatter", action="store", type=str,
+                        help="Read obs data from backscatter sensor.",
+                        default="None")
+    parser.add_argument("-k", "--keys", action="store", type=str,
+                        help="Keys for plots and analysis",
+                        default="Turbidity,ORP,Depth,Temperature,Salinity,Oxygen,dORPdt_log")
+    parser.add_argument("-n", "--numkey", action="store", type=int,
+                        help="Number of keys to display on quickview as default.",
+                        default=6)
     # Create commandline parser
     parse = parser.parse_args()
 
     # Parse commandline input
     sentryname = parse.target
     sensorname = parse.experimental
+    metsname = parse.mets
     usblname = parse.usbl
+    backscattername = parse.backscatter
     bathyname = parse.bathy
     currentname = parse.current
-    liveplot = parse.continuous
+    keys = str(parse.keys)
+    numkeys = int(parse.numkey)
 
     # Create the dashboard
-    tp = SentryDashboard(sentryname, sensorname, usblname, bathyname, currentname, liveplot)
+    tp = SentryDashboard(sentryname, sensorname, metsname, backscattername, usblname, bathyname, currentname, keys, numkeys)

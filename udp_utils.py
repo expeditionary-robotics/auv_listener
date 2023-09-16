@@ -57,7 +57,7 @@ def usbl_message():
     blah2 = 10
     blah3 = 0.0
     blah4 = 0.0
-    mess = str(front) + ' ' + str(measdate) + ' ' + str(vehicle_id) + ' ' + str(ship_id) + \
+    mess = str(front) + ' ' + str(measdate) + ' ' + str(ship_id) + ' ' + str(vehicle_id) + \
         ' ' + str(solution) + ' ' + str(long) + ' ' + str(lat) + ' ' + str(depth) + ' ' + \
         str(blah1) + ' ' + str(blah2) + ' ' + str(blah3) + ' ' + str(blah4)
 

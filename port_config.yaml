@@ -4,6 +4,7 @@ status_queue: 0
 methane_queue: 100  # for SAGE
 supr_queue: 62  # for supr
 mets_queue: 101  # for Mets
+obs_queue: 102  # high sensitvity obs
 
 # USBL information for filtering
 target_ids: [0, 1, 2, 5]

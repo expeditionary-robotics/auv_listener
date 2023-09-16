@@ -387,23 +387,46 @@ class LiveSpatialPlot(Live2DPlot):
 class SentryDashboard(object):
     """Creates a plotly dashboard that updates with streamed data."""
 
-    def __init__(self, sentryfile, sensorfile, usblfile, bathyfile, currentfile, liveplot):
-        self.datafile = sentryfile
-        self.sensorfile = sensorfile
+    def __init__(self, sentryfile, sensorfile, metsfile, backscatterfile, usblfile, bathyfile, currentfile, keys, numkeys):
+        self.datafile = sentryfile  # base case sentry data
+        self.bathyfile = bathyfile  # bathy underlay
+        self.keys = keys.split(",")  # keys to display on charts
+        self.numkeys = numkeys  # number of keys to display on quickviews
+
+        self.sensorfile = sensorfile  # experimental data
         if self.sensorfile == 'None':
             self.sensorfile = None
-        self.usblfile = usblfile
+        self.metsfile = metsfile  # mets methane sensor data
+        if self.metsfile == 'None':
+            self.metsfile = None
+        self.backscatterfile = backscatterfile  # aux OBS data
+        if self.backscatterfile == 'None':
+            self.backscatterfile = None
+        self.usblfile = usblfile  # usbl nav data
         if self.usblfile == 'None':
             self.usblfile = None
-        if currentfile == "None":
+        self.currentfile = currentfile  # caux current data
+        if self.currentfile == "None":
             self.currentfile = None
-        else:
-            self.currentfile = currentfile
-        self.bathyfile = bathyfile
-        self.liveplot = liveplot
+        
 
         # read in the initial sentry science and extra sensor data
         self.df = self.read_and_combine_dataframes(include_location=False)
+        self.last_t = np.nanmax(self.df.t)
+        self.last_current_t = np.nanmax(self.df.t)
+
+        # create a dictionary of sliders
+        self.sliders = {}
+        self.current_sliders = {}
+        for key in self.keys:
+            self.sliders[key] = dcc.RangeSlider(np.nanmin(self.df[key]),
+                                                np.nanmax(self.df[key]),
+                                                value=[np.nanmin(self.df[key]), np.nanmax(self.df[key])],
+                                                id='maptime-slider')
+            self.current_sliders[key] = dcc.RangeSlider(np.nanmin(self.df[key]),
+                                                        np.nanmax(self.df[key]),
+                                                        value=[np.nanmin(self.df[key]), np.nanmax(self.df[key])],
+                                                        id='current-slider')
 
         # cache the bathy underlay in memory
         self.bathy = self.get_bathy_data()
@@ -433,16 +456,23 @@ class SentryDashboard(object):
         # vent_sites_lon = [-129.0662, -129.0756, -
         #                   129.0894, -129.0981, -129.1082]
         # vent_sites_lat = [47.9969, 47.9822, 47.9666, 47.9487, 47.9233]
-        vent_sites_lon = [-129.0894, -129.0981]
-        vent_sites_lat = [47.9666, 47.9487]
+        vent_sites_lon = [-129.0981, -129.0894]
+        vent_sites_lat = [47.9487, 47.9666]
         self.vents_plot = go.Scatter(x=vent_sites_lon,
                                      y=vent_sites_lat,
                                      mode="markers",
                                      name="Vents")
+        vent_sites_easting, vent_sites_northing, _, _ = utm.from_latlon(
+            np.asarray(vent_sites_lat), np.asarray(vent_sites_lon))
+        self.vents_m_plot = go.Scatter(x=vent_sites_easting,
+                                       y=vent_sites_northing,
+                                       mode="markers",
+                                       marker=dict(size=20, color="green"),
+                                       name="Vents")
         # moorings_lon = [-129.0823, -129.0875, -129.0989, -129.1067]
         # moorings_lat = [47.9737, 47.9747, 47.9334, 47.9355]
-        moorings_lon = [-129.0823, -129.0875]#, -129.0989, -129.1067]
-        moorings_lat = [47.9737, 47.9747]#, 47.9334, 47.9355]
+        moorings_lon = []  # [-129.0823, -129.0875]#, -129.0989, -129.1067]
+        moorings_lat = []  # [47.9737, 47.9747]#, 47.9334, 47.9355]
         self.moorings_plot = go.Scatter(x=moorings_lon,
                                         y=moorings_lat,
                                         mode="markers",
@@ -464,7 +494,8 @@ class SentryDashboard(object):
             dash.register_page("sage_engineering",
                                layout=self._create_SAGE_layout())
         if self.currentfile is not None:
-            dash.register_page("ocean_currents_data", layout=self._create_current_layout())
+            dash.register_page("ocean_currents_data",
+                               layout=self._create_current_layout())
 
         app.layout = self._create_app_layout()
 
@@ -477,30 +508,14 @@ class SentryDashboard(object):
                   Input("graph-home-update", "n_intervals"))
         def plot_quickview(n):
             self.df = self.read_and_combine_dataframes(include_location=True)
-            time_plots = make_subplots(rows=9, cols=1, shared_xaxes=True, vertical_spacing=0.025, subplot_titles=[
-                                       "Turbidity", "ORP", "Methane", "Depth", "Potential Density", "Spice", "Temperature", "Salinity", "Oxygen", "Methane"])
-            time_plots.add_trace(go.Scatter(
-                x=self.df.index, y=self.df.Turbidity, mode="lines", name="Turbidity"), row=1, col=1)
-            time_plots.add_trace(go.Scatter(
-                x=self.df.index, y=self.df.ORP, mode="lines", name="ORP"), row=2, col=1)
-            if self.sensorfile is not None:
-                time_plots.add_trace(go.Scatter(
-                    x=self.df.index, y=self.df.methane_ppm, mode="lines", name="Methane"), row=3, col=1)
-            time_plots.add_trace(go.Scatter(
-                x=self.df.index, y=-self.df.Depth, mode="lines", name="Depth"), row=4, col=1)
-            time_plots.add_trace(go.Scatter(
-                x=self.df.index, y=-self.df.potential_density, mode="lines", name="Depth"), row=5, col=1)
-            time_plots.add_trace(go.Scatter(
-                x=self.df.index, y=self.df.spice, mode="lines", name="Depth"), row=6, col=1)
-            time_plots.add_trace(go.Scatter(
-                x=self.df.index, y=self.df.Temperature, mode="lines", name="Temperature"), row=7, col=1)
-            time_plots.add_trace(go.Scatter(
-                x=self.df.index, y=self.df.Salinity, mode="lines", name="Salinity"), row=8, col=1)
-            time_plots.add_trace(go.Scatter(
-                x=self.df.index, y=self.df.Oxygen, mode="lines", name="Oxygen"), row=9, col=1)
-
+            time_plots = make_subplots(rows=self.numkeys, cols=1, shared_xaxes=True, vertical_spacing=0.025, subplot_titles=self.keys)
+            for i in range(0, self.numkeys):
+                time_plots.add_trace(go.Scatter(x=self.df.index,
+                                                y=self.df[self.keys[i]],
+                                                mode="lines",
+                                                name=self.keys[i],), row=i+1, col=1)
             time_plots.update_layout(
-                height=1800, uirevision=True, showlegend=False, margin=dict(t=20), font=dict(size=20), hoverlabel=dict(font_size=20))
+                height=1900, uirevision=True, showlegend=False, margin=dict(t=20), font=dict(size=20), hoverlabel=dict(font_size=20))
             return(time_plots)
 
         # callback for main page/autorefreshing timelines
@@ -529,6 +544,15 @@ class SentryDashboard(object):
                 size=20), hoverlabel=dict(font_size=20))
             if self.sensorfile is not None:
                 figmethane = px.line(self.df, x=self.df.index, y=self.df.methane_ppm, hover_data=[
+                                     "lat", "lon", "Depth"], markers=True)
+                figmethane.update_layout(uirevision=True, font=dict(
+                    size=20), hoverlabel=dict(font_size=20))
+            else:
+                figmethane = px.line(
+                    x=self.df.index, y=np.zeros_like(self.df.t))
+                figmethane.update_layout(uirevision=True, font=dict(size=20))
+            if self.metsfile is not None:
+                figmethane = px.line(self.df, x=self.df.index, y=self.df.methane_mets, hover_data=[
                                      "lat", "lon", "Depth"], markers=True)
                 figmethane.update_layout(uirevision=True, font=dict(
                     size=20), hoverlabel=dict(font_size=20))
@@ -643,11 +667,12 @@ class SentryDashboard(object):
             """Render the maps on the maps page."""
             # get the usbl relevant data
             map_df = self.read_and_combine_dataframes(include_location=True)
-            map_plots = make_subplots(rows=1, cols=2, specs=[[{"type": "scatter3d"}, {"type": "scatter3d"}]])
+            map_plots = make_subplots(rows=1, cols=2, specs=[
+                                      [{"type": "scatter3d"}, {"type": "scatter3d"}]])
             map_plots.add_trace(self.bathy_3dplot, row=1, col=1)
             map_plots.add_trace(go.Scatter3d(x=map_df['lon'],
                                              y=map_df['lat'],
-                                             z=-map_df['Depth'],
+                                             z=map_df['Depth'],
                                              mode="markers",
                                              marker=dict(size=2,
                                                          color=map_df[vtarg],
@@ -713,10 +738,28 @@ class SentryDashboard(object):
             # return(fig_3d)
             return(map_plots)
 
+        @callback(Output("maptime-slider-time", "min"),
+                  Output("maptime-slider-time", "max"),
+                  Output("maptime-slider-time", "value"),
+                  Input("maptime-timer-update", "n_intervals"),
+                  Input("maptime-slider-time", "value"))
+        def update_maptime_time_slider(n, tlims):
+            slide_max = tlims[-1]
+            self.df = self.read_and_combine_dataframes(include_location=True)
+            if slide_max >= self.last_t:
+                self.last_t = np.nanmax(self.df.t)
+                return(np.nanmin(self.df.t), np.nanmax(self.df.t), [tlims[0], np.nanmax(self.df.t)])
+            else:
+                return(np.nanmin(self.df.t), np.nanmax(self.df.t), tlims)
+        
+
+        @callback(Output("maptime-rangeslider-slider", "children"),
+                  Input("maptime-selection", "value"))
+        def make_maptime_slider(val):
+            return(self.sliders[val])
+        
         @callback(Output("graph-maptime-time", "figure"),
                   Output("graph-maptime-map", "figure"),
-                  Output("maptime-slider", "min"),
-                  Output("maptime-slider", "max"),
                   Input("maptime-selection", "value"),
                   Input("maptime-slider", "value"),
                   Input("maptime-slider-time", "value"),
@@ -724,16 +767,36 @@ class SentryDashboard(object):
                   Input("graph-maptime-time", "clickData"))
         def plot_maptime(vtarg, sliders, time_lims, hovermap, hovertime):
             """Render the map and timeline on the Map-time page."""
-            df = self.read_and_combine_dataframes(include_location=True)
+            self.df = self.read_and_combine_dataframes(include_location=True)
+            df = self.df.copy()
             df = df[(df.t >= time_lims[0]) & (df.t <= time_lims[1])]
+            
+            # make sure the rendering options for the overhead colorbar are updated
             slider_min = np.nanmin(df[vtarg])
-            slider_max = np.nanmax(df[vtarg])
+            if vtarg == "dORPdt":
+                slider_max = 0
+            else:
+                slider_max = np.nanmax(df[vtarg])
+            
+            if sliders[0] >= slider_min and sliders[1] <= slider_max and sliders[0] < sliders[1]:
+                sliders = sliders
+            elif sliders[0] >= slider_min and sliders[0] < slider_max:
+                sliders = [sliders[0], slider_max]
+            elif sliders[1] <= slider_max and sliders[0] < sliders[1]:
+                sliders = [slider_min, sliders[1]]
+            else:
+                sliders = [slider_min, slider_max]
+            self.sliders[vtarg].value = sliders
+            self.sliders[vtarg].min = np.nanmin(df[vtarg])
+            self.sliders[vtarg].max = np.nanmax(df[vtarg])
+
+            # plot the overhead map
             if vtarg is not None:
                 tfig = go.Scatter(x=df.index, y=df[vtarg], mode="lines")
                 mfig = go.Scatter(x=df.lon,
                                   y=df.lat,
                                   mode="markers",
-                                  marker=dict(size=3,
+                                  marker=dict(size=5,
                                               color=df[vtarg],
                                               colorscale="Inferno",
                                               cmin=sliders[0],
@@ -745,6 +808,7 @@ class SentryDashboard(object):
                        self.vents_plot, self.moorings_plot, mfig]
             time_fig = [tfig]
 
+            # add click-interface information
             if hovertime is not None:
                 hdata = hovertime["points"][0]
                 loc = df[(df.index == hdata["x"])]
@@ -758,6 +822,7 @@ class SentryDashboard(object):
                 time_fig.append(go.Scatter(
                     x=time.index, y=time[vtarg], mode="markers", marker=dict(size=10, color=['#EF553B'])))
 
+            # create the final map
             final_map_fig = go.Figure(map_fig)
             final_map_fig.update_yaxes(scaleanchor="x", scaleratio=1)
             final_map_fig.update_layout(uirevision=True, font=dict(
@@ -766,47 +831,88 @@ class SentryDashboard(object):
             final_time_fig.update_layout(uirevision=True, showlegend=False, font=dict(
                 size=20), hoverlabel=dict(font_size=20))
 
-            return(final_time_fig, final_map_fig, slider_min, slider_max)
+            return(final_time_fig, final_map_fig)
 
         
-        
+        @callback(Output("current-slider-time", "min"),
+                  Output("current-slider-time", "max"),
+                  Output("current-slider-time", "value"),
+                  Input("current-timer-update", "n_intervals"),
+                  Input("current-slider-time", "value"))
+        def update_current_time_slider(n, tlims):
+            slide_max = tlims[-1]
+            self.df = self.read_and_combine_dataframes(include_location=True)
+            if slide_max >= self.last_current_t:
+                self.last_current_t = np.nanmax(self.df.t)
+                return(np.nanmin(self.df.t), np.nanmax(self.df.t), [tlims[0], np.nanmax(self.df.t)])
+            else:
+                return(np.nanmin(self.df.t), np.nanmax(self.df.t), tlims)
+
+        @callback(Output("current-rangeslider-slider", "children"),
+                  Input("current-selection", "value"))
+        def make_current_slider(val):
+            return(self.current_sliders[val])
+
         @callback(Output("graph-content-currentmap", "figure"),
                   Output("graph-content-currentx", "figure"),
                   Output("graph-content-currenty", "figure"),
                   Input("current-selection", "value"),
                   Input("current-slider", "value"),
                   Input("current-slider-time", "value"))
-        def plot_ocean_currents(vtarg, vtarg_lims, time_lims):
+        def plot_ocean_currents(vtarg, sliders, time_lims):
             """Create the visualizations of ocean current from file."""
-            df = self.read_and_combine_dataframes(include_location=True)
+            self.df = self.read_and_combine_dataframes(include_location=True)
+            df = self.df.copy()
             df = df[(df.t >= time_lims[0]) & (df.t <= time_lims[1])]
-            quiv = ff.create_quiver(df.easting[::10], df.northing[::10], df.true_veast[::10], df.true_vnorth[::10], scale=5000, arrow_scale=0.1, name='quiver', line_width=1)
+           
+           # make sure the rendering options for the overhead colorbar are updated
+            slider_min = np.nanmin(df[vtarg])
+            if vtarg == "dORPdt":
+                slider_max = 0
+            else:
+                slider_max = np.nanmax(df[vtarg])
+            if sliders[0] >= slider_min and sliders[1] <= slider_max and sliders[0] < sliders[1]:
+                sliders = sliders
+            elif sliders[0] >= slider_min and sliders[0] < slider_max:
+                sliders = [sliders[0], slider_max]
+            elif sliders[1] <= slider_max and sliders[0] < sliders[1]:
+                sliders = [slider_min, sliders[1]]
+            else:
+                sliders = [slider_min, slider_max]
+            self.current_sliders[vtarg].value = sliders
+            self.current_sliders[vtarg].min = np.nanmin(df[vtarg])
+            self.current_sliders[vtarg].max = np.nanmax(df[vtarg])
+            
+            quiv = ff.create_quiver(df.easting[::10], df.northing[::10], df.true_veast[::10],
+                                    df.true_vnorth[::10], scale=3000, arrow_scale=0.1, name='quiver', line_width=2)
             quiv.add_trace(go.Scatter(x=df.easting,
-                                y=df.northing,
-                                mode="markers",
-                                marker=dict(size=3,
-                                            color=df[vtarg],
-                                            colorscale="Inferno",
-                                            cmin=vtarg_lims[0],
-                                            cmax=vtarg_lims[1],
-                                            colorbar=dict(thickness=20,
-                                                        x=-0.2,
-                                                        tickfont=dict(size=20)))))
-            # quiv.add_trace(self.bathy_2dplot)
-            currentx_fig = go.Scatter(x=df.index,
-                                        y=df.true_veast,
-                                        mode="markers",
-                                        marker=dict(size=3))
-            currenty_fig = go.Scatter(x=df.index,
-                                        y=df.true_vnorth,
-                                        mode="markers",
-                                        marker=dict(size=3))
+                                      y=df.northing,
+                                      mode="markers",
+                                      marker=dict(size=5,
+                                                  color=df[vtarg],
+                                                  colorscale="Inferno",
+                                                  cmin=sliders[0],
+                                                  cmax=sliders[1],
+                                                  colorbar=dict(thickness=20,
+                                                                x=-0.2,
+                                                                tickfont=dict(size=20)))))
+            quiv.add_trace(self.vents_m_plot)
+            currentx_fig = go.Figure(go.Scatter(x=df.index,
+                                      y=df.true_veast,
+                                      mode="markers",
+                                      marker=dict(size=3),
+                                      name="Current Magnitude - True East"))
+            currenty_fig = go.Figure(go.Scatter(x=df.index,
+                                      y=df.true_vnorth,
+                                      mode="markers",
+                                      marker=dict(size=3),
+                                      name="Current Magnitude - True North"))
             quiv.update_yaxes(scaleanchor="x", scaleratio=1)
-            quiv.update_layout(showlegend=False)
-            return(quiv, go.Figure([currentx_fig]), go.Figure([currenty_fig]))
-        
-        
-        
+            quiv.update_layout(showlegend=False, uirevision=True)
+            currentx_fig.update_layout(title="Current Magnitude - True East", uirevision=True)
+            currenty_fig.update_layout(title="Current Magnitude - True North", uirevision=True)
+            return(quiv, currentx_fig, currenty_fig)
+
         app.run(debug=True)
 
     def _create_app_layout(self):
@@ -848,12 +954,12 @@ class SentryDashboard(object):
         """Create the ability to examine thresholds in a dashboard."""
         layout = dbc.Container([dbc.Row([html.Div(children=[html.H1(children="Simple Data Exploration Dashboard", style={"textAlign": "center"})]),
                                          html.Div(children=["Select x variable:",
-                                                            dcc.Dropdown(self.df.columns.unique(), "Temperature", id="x-axis-selection")]),
+                                                            dcc.Dropdown(self.keys, "Turbidity", id="x-axis-selection")]),
                                          html.Div(children=["Select y variable:",
-                                                            dcc.Dropdown(self.df.columns.unique(), "Turbidity", id="y-axis-selection")],
+                                                            dcc.Dropdown(self.keys, "Temperature", id="y-axis-selection")],
                                                   style={'margin-top': 20}),
                                          html.Div(children=["Select color variable:",
-                                                            dcc.Dropdown(self.df.columns.unique().to_list()+["Anomaly"], "Anomaly", id="c-axis-selection")],
+                                                            dcc.Dropdown(self.keys+["Anomaly"], "Anomaly", id="c-axis-selection")],
                                                   style={'margin-top': 20}),
                                          html.Div(children=["Set anomaly detection threshold (standard deviations):",
                                                             dcc.Slider(0, 4, 0.5, value=1,
@@ -870,30 +976,26 @@ class SentryDashboard(object):
         """Create the map dashboard scene."""
         layout = html.Div([html.H1(children="Map Dashboard", style={"textAlign": "center"}),
                            html.Div(children=["Select variable to visualize:",
-                                              dcc.Dropdown(self.df.columns.unique(), "Turbidity", id="map-selection")], style={"margin-top": 20}),
+                                              dcc.Dropdown(self.keys, self.keys[0], id="map-selection")], style={"margin-top": 20}),
                            html.Div(children=[dcc.Graph(id="3d-map", style={'height': '90vh'})])])
         return(layout)
 
     def _create_maptime_layout(self):
         """Create a map and timeline with hover capabilities."""
-        layout = dbc.Container([dbc.Row([html.Div(children=[html.H1(children="Map-Time Dashboard", style={"textAlign": "center"})]),
+        layout = dbc.Container([dbc.Row([html.Div(children=[html.H1(children="Map-Time Dashboard", style={"textAlign": "center"}),
+                                                            dcc.Interval(id="maptime-timer-update", interval=30*1000, n_intervals=0),]),
                                          html.Div(children=["Select variable:",
-                                                            dcc.Dropdown(self.df.columns.unique(), "Turbidity", id="maptime-selection")]),
-                                         html.Div(children=["Set rendering scale:",
-                                                            dcc.RangeSlider(np.nanmin(self.df.Turbidity),
-                                                                            np.nanmax(
-                                                                                self.df.Turbidity),
-                                                                            value=[np.nanmin(self.df.Turbidity), np.nanmax(
-                                                                                self.df.Turbidity)],
-                                                                            id='maptime-slider')],
-                                                  style={"margin-top": 20}),
+                                                            dcc.Dropdown(self.keys, self.keys[0], id="maptime-selection")]),
+                                         html.Div(children=["Set rendering scale:"], style={"margin-top": 20}),
+                                         html.Div(id='maptime-rangeslider-slider'),
                                          html.Div(children=["Set times to display:",
-                                                            dcc.RangeSlider(self.df.t.min(),
-                                                                            self.df.t.max(),
-                                                                            value=[self.df.t.min(), self.df.t.max()],
-                                                                            marks={int(date) : {"label": str(pd.to_datetime(date, unit="s"))} for each, date in enumerate(self.df.t[::500])},
+                                                            dcc.RangeSlider(np.nanmin(self.df.t),
+                                                                            np.nanmax(self.df.t),
+                                                                            value=[np.nanmin(self.df.t), np.nanmax(self.df.t)+24*3600.],
+                                                                            marks={int(date): {"label": str(pd.to_datetime(
+                                                                                date, unit="s"))} for each, date in enumerate(self.df.t[::100])},
                                                                             id='maptime-slider-time')],
-                                                            style={"margin-top": 20})
+                                                  style={"margin-top": 20})
                                          ]),
                                 dbc.Row([dbc.Col([dcc.Graph(id="graph-maptime-time", style={"width": "50vw", "height": "60vh"})]),
                                          dbc.Col([dcc.Graph(id="graph-maptime-map", style={"width": "45vw", "height": "80vh"})]), ], style={"display": "flex"})], fluid=True)
@@ -901,23 +1003,23 @@ class SentryDashboard(object):
 
     def _create_current_layout(self):
         """Create the layout for plotting current data over plotted points."""
-        layout = dbc.Container([dbc.Row([html.Div(children=[html.H1(children="Ocean Currents Dashboard", style={"textAlign": "center"})]),
+        layout = dbc.Container([dbc.Row([html.Div(children=[html.H1(children="Ocean Currents Dashboard", style={"textAlign": "center"}),
+                                                            dcc.Interval(id="current-timer-update", interval=30*1000, n_intervals=0)]),
                                          html.Div(children=["Select variable:",
-                                                            dcc.Dropdown(self.df.columns.unique(), "Turbidity", id="current-selection")]),
-                                         html.Div(children=["Set rendering scale:",
-                                                            dcc.RangeSlider(np.nanmin(self.df.Turbidity),
-                                                                            np.nanmax(self.df.Turbidity),
-                                                                            value=[np.nanmin(self.df.Turbidity), np.nanmax(self.df.Turbidity)],
-                                                                            id='current-slider')],
-                                                            style={"margin-top": 20}),
+                                                            dcc.Dropdown(self.keys, self.keys[0], id="current-selection")]),
+                                         html.Div(children=["Set rendering scale:"], style={"margin-top":20}),
+                                         html.Div(id="current-rangeslider-slider"),
                                          html.Div(children=["Set times to display:",
-                                                            dcc.RangeSlider(self.df.t.min(),
-                                                                            self.df.t.max(),
-                                                                            value=[self.df.t.min(), self.df.t.max()],
-                                                                            marks={int(date) : {"label": str(pd.to_datetime(date, unit="s"))} for each, date in enumerate(self.df.t[::500])},
+                                                            dcc.RangeSlider(np.nanmin(self.df.t),
+                                                                            np.nanmax(
+                                                                                self.df.t),
+                                                                            value=[
+                                                                                np.nanmin(self.df.t), np.nanmax(self.df.t) + 24 * 3600.],
+                                                                            marks={int(date): {"label": str(pd.to_datetime(
+                                                                                date, unit="s"))} for each, date in enumerate(self.df.t[::100])},
                                                                             id='current-slider-time')],
-                                                            style={"margin-top": 20})
-                                        ]),
+                                                  style={"margin-top": 20})
+                                         ]),
                                 dbc.Row([dbc.Col([dcc.Graph(id="graph-content-currentmap", style={'width': '45vw', 'height': '60vh'})]),
                                          dbc.Col([dcc.Graph(id="graph-content-currentx", style={'width': '50vw', 'height': '30vh'}),
                                                   dcc.Graph(id="graph-content-currenty", style={'width': '50vw', 'height': '30vh'})]), ], style={'display': 'flex'})], fluid=True)
@@ -947,9 +1049,14 @@ class SentryDashboard(object):
         # combine only the sentry and sensor dataframes
         df = pd.read_csv(self.datafile, sep=",", header=None, names=[
             "Time", "Oxygen", "Turbidity", "ORP", "Temperature", "Salinity", "Depth"])
+        df["Depth"] = -df["Depth"]
         df["Time"] = pd.to_datetime(df["Time"])
         df.loc[:, "t"] = (
             df["Time"] - pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
+        df.loc[:, "dORPdt"] = df.ORP.rolling(window=2).apply(lambda x: (x.iloc[-1] - x.iloc[0])/(2))
+        dORPdt_mask = df.dORPdt < 0.0
+        df.loc[:, "dORPdt_log"] = np.log(np.fabs(df.dORPdt * dORPdt_mask))
+        df["dORPdt_log"].replace([-np.inf, np.inf], -15, inplace=True)
 
         merge_df = df
         sentry_data_index = merge_df.t.values[0]
@@ -978,7 +1085,53 @@ class SentryDashboard(object):
                                        pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
 
             # interpolate the methane sensor data onto the sentry data
-            merge_df = df.merge(self.sensor, how="outer", on="t")
+            merge_df = merge_df.merge(self.sensor, how="outer", on="t")
+        else:
+            pass
+        
+        if self.metsfile is not None:
+            self.mets = pd.read_table(self.metsfile,
+                                        sep=",",
+                                        header=None,
+                                        names=["msgTimeMets",
+                                               "sensorTimeMets",
+                                               "instrument_name_mets",
+                                               "process_from_volts",
+                                               "temp_mets_count",
+                                               "temperature_mets",
+                                               "methane_mets_count",
+                                               "methane_mets"])
+            self.mets["methaneTimeMets"] = pd.to_datetime(self.mets["sensorTimeMets"])
+            self.mets.loc[:, "t"] = (self.mets["methaneTimeMets"] -
+                                       pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
+            self.mets["methane_mets"] = self.mets.apply(lambda x: float(x.methane_mets.strip(" ").strip("?"))*1000., axis=1)
+
+            # interpolate the methane sensor data onto the sentry data
+            merge_df = merge_df.merge(self.mets[["t", "methane_mets"]], how="outer", on="t")
+        else:
+            pass
+            
+        if self.backscatterfile is not None:
+            # SDQ 102:2023-09-12T17:38:44 +0.0342 +0.0000 +0.0000 +0.0000???
+            self.backscatter = pd.read_table(self.backscatterfile,
+                                        sep=",| ",
+                                        engine="python",
+                                        header=None,
+                                        names=["msgDate",
+                                               "msgTime",
+                                               "sensorDate",
+                                               "sensorTime",
+                                               "turbidity_obs_5x",
+                                               "temp1",
+                                               "temp2",
+                                               "temp3"])
+            self.backscatter["sensorTimeObs"] = self.backscatter.apply(lambda x: f"{x.sensorDate} {x.sensorTime}",axis=1)
+            self.backscatter["TimeObs"] = pd.to_datetime(self.backscatter["sensorTimeObs"])
+            self.backscatter.loc[:, "t"] = (self.backscatter["TimeObs"] -
+                                       pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
+
+            # interpolate the methane sensor data onto the sentry data
+            merge_df = merge_df.merge(self.backscatter[["t", "turbidity_obs_5x"]], how="outer", on="t")
         else:
             pass
 
@@ -999,7 +1152,8 @@ class SentryDashboard(object):
         if self.currentfile is not None:
             df = pd.read_csv(self.currentfile,
                              sep=",")
-            df = df[(df.t > merge_df.t.values[0]) & (df.t < merge_df.t.values[-1])]
+            df = df[(df.t > merge_df.t.values[0]) &
+                    (df.t < merge_df.t.values[-1])]
             merge_df = merge_df.merge(df, how="outer", on="t")
 
         # index by time for consistency
@@ -1012,17 +1166,19 @@ class SentryDashboard(object):
         merge_df = merge_df.interpolate(method="ffill")
         pot_den, spice = self.compute_potential_density_and_spice(merge_df.Salinity.values,
                                                                   merge_df.Temperature.values,
-                                                                  merge_df.Depth.values,
+                                                                  -merge_df.Depth.values,
                                                                   merge_df.lat.values,
                                                                   merge_df.lon.values)
         merge_df.loc[:, "spice"] = spice
         merge_df.loc[:, "potential_density"] = pot_den
-        
+
         if self.usblfile is not None:
             merge_df = merge_df.dropna(subset=["lat", "lon"])
-            easting, northing, _, _ = utm.from_latlon(merge_df.lat.values, merge_df.lon.values)
+            easting, northing, _, _ = utm.from_latlon(
+                merge_df.lat.values, merge_df.lon.values)
             merge_df.loc[:, "northing"] = northing
             merge_df.loc[:, "easting"] = easting
+
         return(merge_df)  # return the single, combined dataframe
 
     def read_sensorfile(self):
