@@ -1,6 +1,6 @@
 """Plotly dashboard for live SENTRY data display and exploration.
 
-Example: python sentry_dashboard.py -t ./test_sentry_science.txt -b ./bathy.txt -c 
+Example: python sentry_dashboard.py -t ./test_sentry_science.txt -b ./bathy.txt 
 Plots data from live-updating test_sentry_science.txt file using
 the bathy.txt file as a map underlay.
 Individual timeseries, and map will be made available.

@@ -700,42 +700,6 @@ class SentryDashboard(object):
                                                          colorbar=dict(thickness=30, x=-0.1)),
                                              hovertext=map_df.index,
                                              hoverinfo="name+x+y+z+text"), row=1, col=2)
-
-            # 3D display
-            # figs_3d = []#[self.bathy_3dplot]
-            # figs_3d.append(go.Scatter3d(x=map_df['lon'],
-            #                             y=map_df['lat'],
-            #                             z=-map_df['Depth'],
-            #                             mode="markers",
-            #                             marker=dict(size=2,
-            #                                         color=map_df[vtarg],
-            #                                         opacity=0.7,
-            #                                         colorscale="Inferno",
-            #                                         cmin=np.nanpercentile(
-            #                                             map_df[vtarg], 10),
-            #                                         cmax=np.nanpercentile(
-            #                                             map_df[vtarg], 90),
-            #                                         colorbar=dict(thickness=30, x=-0.1)),
-            #                             hovertext=map_df.index,
-            #                             hoverinfo="name+x+y+z+text"))
-            # figs_3d.append(go.Scatter3d(x=map_df['lon'],
-            #                             y=map_df['lat'],
-            #                             z=-map_df['t'],
-            #                             mode="markers",
-            #                             marker=dict(size=2,
-            #                                         color=map_df[vtarg],
-            #                                         opacity=0.7,
-            #                                         colorscale="Inferno",
-            #                                         cmin=np.nanpercentile(
-            #                                             map_df[vtarg], 10),
-            #                                         cmax=np.nanpercentile(
-            #                                             map_df[vtarg], 90),
-            #                                         colorbar=dict(thickness=30, x=-0.1)),
-            #                             hovertext=map_df.index,
-            #                             hoverinfo="name+x+y+z+text"))
-            # fig_3d = go.Figure(data=figs_3d, layout_title_text=f"{vtarg}")
-            # fig_3d.update_layout(uirevision=True, font=dict(size=20), hoverlabel=dict(font_size=20))
-            # return(fig_3d)
             return(map_plots)
 
         @callback(Output("maptime-slider-time", "min"),
