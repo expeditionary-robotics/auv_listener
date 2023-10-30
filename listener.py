@@ -20,10 +20,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--ip", action="store",
                         type=str, help="IP address of network.",
-                        default="127.0.0.1")
+                        default="192.168.100.226")
     parser.add_argument("-p", "--port", action="store", type=str,
                         help="Port for listening.",
-                        default="52464")
+                        default="55904")
     parser.add_argument("-f", "--filepath", action="store", type=str,
                         help="Write data at this filepath.",
                         default="./")

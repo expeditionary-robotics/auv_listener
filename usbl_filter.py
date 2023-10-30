@@ -7,19 +7,19 @@ Reads in all USBL messages logged to ./data/raw_usbl.txt and writes
 filtered status messages to ./dive613_usbl_{sentry, ship, jason, ctd}.txt.
 
 Authors: Genevieve Flaspohler and Victoria Preston
-Update: August 2022
+Update: August 2023
 Contact: {geflaspo, vpreston}@mit.edu
 """
 import os
+import yaml
 import argparse
 from filter_utils import parse_usbl_payload
 
-# THESE MAY NEED TO BE UPDATED DEPENDING ON THE SPECIFIC CRUISE
-SENTRY_ID = str(0)
-JASON_ID = str(1)
-SHIP_ID = str(2)
-CTD_ID = str(5)
-
+# Get the USBL string IDs for each of the targets
+with open("port_config.yaml") as f:
+    globes = yaml.safe_load(f)
+TARGET_IDS = globes["target_ids"]
+TARGET_NAMES = globes["target_names"]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -39,9 +39,8 @@ if __name__ == '__main__':
     filepath = parse.filepath
     name = parse.name
     raw_file = parse.target
-    queue_names = ["sentry", "jason", "ship", "ctd"]
-    queue_files = [os.path.join(filepath, f"{name}_usbl_{q}.txt")
-                   for q in queue_names]
+    queue_files = [os.path.join(filepath, f"{name}_{q}.txt")
+                   for q in TARGET_NAMES]
 
     # Now parse the file target by polling and parsing any new lines
     last_line = 0
@@ -60,7 +59,9 @@ if __name__ == '__main__':
 
         # Populate data
         for line in parse_lines:
+            # print(line)
             if len(line) == 0:
                 continue
-            parse_usbl_payload(line, queue_files[0], queue_files[1],
-                               queue_files[2], queue_files[3], SENTRY_ID, JASON_ID, SHIP_ID, CTD_ID)
+            parse_usbl_payload(line,
+                               queue_files,
+                               TARGET_IDS)

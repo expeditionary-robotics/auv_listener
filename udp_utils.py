@@ -47,18 +47,18 @@ def usbl_message():
     """
     front = np.random.choice(["VFR", "VPR"])
     measdate = datetime.datetime.now()
-    vehicle_id = np.random.randint(0, 3)
-    ship_id = np.random.randint(0, 3)
-    solution = np.random.choice(["SOLN_USBL", "SOLN_SHIP", "SOLN"])
-    lat = np.float32(np.random.rand(1)[0])
-    long = np.float32(np.random.rand(1)[0])
-    depth = np.float32(-1. * np.random.rand(1)[0])
+    vehicle_id = 0
+    ship_id = 2
+    solution = np.random.choice(["SOLN_USBL", "SOLN_GPS0"])
+    lat = np.float32(48.0 + np.random.rand(1)[0])
+    long = np.float32(-129.0 + np.random.rand(1)[0])
+    depth = np.float32(-1920. + 100. * np.random.rand(1)[0])
     blah1 = 0.0
     blah2 = 10
     blah3 = 0.0
     blah4 = 0.0
-    mess = str(front) + ' ' + str(measdate) + ' ' + str(vehicle_id) + ' ' + str(ship_id) + \
-        ' ' + str(solution) + ' ' + str(lat) + ' ' + str(long) + ' ' + str(depth) + ' ' + \
+    mess = str(front) + ' ' + str(measdate) + ' ' + str(ship_id) + ' ' + str(vehicle_id) + \
+        ' ' + str(solution) + ' ' + str(long) + ' ' + str(lat) + ' ' + str(depth) + ' ' + \
         str(blah1) + ' ' + str(blah2) + ' ' + str(blah3) + ' ' + str(blah4)
 
     return mess
@@ -94,7 +94,7 @@ def sentry_status_message():
 def sentry_science_message():
     """Creates spoofed sentry science message."""
     parts = ["SMS>blah|",  # front matter
-             "SDQ 34:",  # queue_num
+             "SDQ 31:",  # queue_num
              str(round(random.random()*250, 2))+" ",  # o2
              str(round(random.random()*100, 2))+" ",  # obs
              str(round(random.random()*50, 2))+" ",  # orp
@@ -128,12 +128,19 @@ def pythia_message():
 
 def sage_message():
     """Creates a spoofed SAGE message, an experimental instrument."""
-    # 20210904T142137,5.9555,917,23.9,34
-    front = "SMS>blah|SDQ 100:"
+    # 20210905T215053,501,2.0011,1002.34,24.55,248.11,24.21,26.07,26.3,0.682,0,0 
+    front = "SMS>blah|SDQ 101:"
     ydt = "20210904T142137,"
-    meas1 = str(np.round(np.random.rand(1)*10, 4)) + ","
-    meas2 = str(np.random.randint(917, 1029)) + ","
-    meas3 = str(np.round(np.random.rand(1)*24, 1)) + ","
-    meas4 = str(np.random.randint(30, 40))
-    mess = front + ydt + meas1 + meas2 + meas3 + meas4
+    meas1 = str(501) + ","  # onboard file number
+    meas2 = str(np.round(np.random.rand(1)*24, 4)[0]) + ","  # methane ppm
+    meas3 = str(np.round(np.random.rand(1)*1000, 2)[0]) + ","  # inlet pressure mbar
+    meas4 = str(np.round(np.random.rand(1)*24, 2)[0]) + ","  # inlet temperature C
+    meas5 = str(np.round(np.random.rand(1)*250, 2)[0]) + ","  # housing pressure mbar
+    meas6 = str(np.round(np.random.rand(1)*24, 2)[0]) + ","  # water temperature C
+    meas7 = str(np.round(np.random.rand(1)*26, 2)[0]) + ","  # junction temperature C
+    meas8 = str(np.round(np.random.rand(1)*50, 1)[0]) + ","  # junction humidity %
+    meas9 = str(np.round(np.random.rand(1), 3)[0]) + ","  # avg PD voltage V
+    meas10 = str(np.random.randint(0, 2)) + ","  # inlet heater state 0/1
+    meas11 = str(np.random.randint(0, 2))  # junction heater state 0/1
+    mess = front + ydt + meas1 + meas2 + meas3 + meas4 + meas5 + meas6 + meas7 + meas8 + meas9 + meas10 + meas11
     return mess

@@ -56,8 +56,21 @@ def filter_experimental_message(message):
     """Stand-in function for experimental sensors parsed in queue."""
     return str(message)
 
+def filter_supr_message(message):
+    """Stand-in function for supr sensors parsed in queue."""
+    return str(message)
 
-def parse_sentry_payload(message, status_queue, science_queue, experimental_queue):
+
+def filter_mets_message(message):
+    """Stand-in function for supr sensors parsed in queue."""
+    return str(message)
+
+def filter_obs_message(message):
+    """Stand-in function for high sensitivity obs sensors parsed in queue."""
+    return str(message)
+
+
+def parse_sentry_payload(message, status_queue, science_queue, experimental_queue, supr_queue, mets_queue, obs_queue):
     """Inspects the message and returns the message type.
     One of "status", "science", "experimental", or None
     Provide the message and queue targets for status, science, and experimental.
@@ -79,57 +92,44 @@ def parse_sentry_payload(message, status_queue, science_queue, experimental_queu
             return "science", payload, timestamp
         elif queue == experimental_queue:
             return "experimental", payload, timestamp
+        elif queue == supr_queue:
+            return "supr", payload, timestamp
+        elif queue == mets_queue:
+            return "mets", payload, timestamp
+        elif queue == obs_queue:
+            return "obs", payload, timestamp
         else:
             return None, message, timestamp
     except:
         return None, message, timestamp
 
 
-def parse_usbl_payload(message, sentry_file_target, jason_file_target, ship_file_target, ctd_file_target, sentry_id, jason_id, ship_id, ctd_id):
+def parse_usbl_payload(message, file_targets, target_ids):
     """Filters message of format:
     VFR 2019/09/24 13:27:58.033 2 0 SOLN_USBL -125.079565 44.489675 -597.900 0.000 10 0.00 0.00
     """
     mess = str(message)
-    packets = mess.split(" ")
-    new_stamp = packets[1].replace("/", "-")  # standadize timestamp
+    info_data = mess.split("|")[1]
+    packets = info_data.split(" ")
+    timestamp = mess.split("|")[0]
     # extract relevant info
-    info = f"{new_stamp} {packets[2]},{packets[6]},{packets[7]},{packets[8]}"
+    info = f"{timestamp},{packets[6]},{packets[7]},{packets[8]}"
 
     if "VFR" in packets[0]:
-        if packets[4] == sentry_id and "USBL" in packets[5]:
-            if os.path.isfile(sentry_file_target):
-                mode = "a"
+        for ft, tid in zip (file_targets, target_ids):
+            if "USBL" in str(packets[5]) or "GPS0" in str(packets[5]):
+                if packets[4] == str(tid):
+                    if os.path.isfile(ft):
+                        mode = "a"
+                    else:
+                        mode = "w+"
+                    with open(ft, mode) as rf:
+                        rf.write(f"{info}\n")
+                        rf.flush()
+                else:
+                    pass
             else:
-                mode = "w+"
-            with open(sentry_file_target, mode) as rf:
-                rf.write(f"{info}\n")
-                rf.flush()
-        elif packets[4] == jason_id and "USBL" in packets[5]:
-            if os.path.isfile(jason_file_target):
-                mode = "a"
-            else:
-                mode = "w+"
-            with open(jason_file_target, mode) as rf:
-                rf.write(f"{info}\n")
-                rf.flush()
-        elif packets[4] == ship_id and "SOLN_GPS0" in packets[5]:
-            if os.path.isfile(ship_file_target):
-                mode = "a"
-            else:
-                mode = "w+"
-            with open(ship_file_target, mode) as rf:
-                rf.write(f"{info}\n")
-                rf.flush()
-        elif packets[4] == ctd_id and "USBL" in packets[5]:
-            if os.path.isfile(ctd_file_target):
-                mode = "a"
-            else:
-                mode = "w+"
-            with open(ctd_file_target, mode) as rf:
-                rf.write(f"{info}\n")
-                rf.flush()
-        else:
-            pass
+                pass
     else:
         pass
 
