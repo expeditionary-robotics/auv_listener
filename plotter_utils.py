@@ -429,11 +429,11 @@ class SentryDashboard(object):
                                                         id='current-slider')
 
         # cache the bathy underlay in memory
-        self.bathy = self.get_bathy_data()
-        self.bathy_3dplot = go.Mesh3d(x=self.bathy.lon[0::10],
-                                      y=self.bathy.lat[0::10],
-                                      z=self.bathy.depth[0::10],
-                                      intensity=self.bathy.depth[0::10],
+        self.bathy = self.get_bathy_data(subsample=50)
+        self.bathy_3dplot = go.Mesh3d(x=self.bathy.lon,
+                                      y=self.bathy.lat,
+                                      z=self.bathy.depth,
+                                      intensity=self.bathy.depth,
                                       colorscale='Viridis',
                                       opacity=0.50,
                                       name="Bathy")
@@ -448,16 +448,18 @@ class SentryDashboard(object):
                                        y=ylat[:, 0],
                                        z=Z,
                                        contours=dict(
-                                           start=-2800., end=-2000., size=20),
+                                           start=-2600., end=-1800., size=20),
                                        contours_coloring="lines",
                                        colorscale="Greys",
                                        line=dict(width=0.5),
                                        name="Bathy")
-        # vent_sites_lon = [-129.0662, -129.0756, -
-        #                   129.0894, -129.0981, -129.1082]
-        # vent_sites_lat = [47.9969, 47.9822, 47.9666, 47.9487, 47.9233]
-        vent_sites_lon = [-129.0981, -129.0894]
-        vent_sites_lat = [47.9487, 47.9666]
+        bio9 = [9.83848, -104.291389]
+        pvent = [9.83798, -104.29125]
+        ybw = [9.905645, -104.294382]
+        # vent_sites_lon = [-104.29337, -104.29444, -104.29453, -104.2946, -104.2944, -104.29432, -104.29423, -104.29411, -104.29439, -104.29436, -104.2942, -104.29451, -104.29435, -104.29418, -104.294326]  # ybw vents
+        # vent_sites_lat = [9.90602, 9.90591, 9.90579, 9.90566, 9.9057, 9.90567, 9.90568, 9.90575, 9.90558, 9.90544, 9.90557, 9.90543, 9.90536, 9.9054, 9.905136]  # ybw vents
+        vent_sites_lon = [bio9[1], pvent[1]]
+        vent_sites_lat = [bio9[0], pvent[0]]
         self.vents_plot = go.Scatter(x=vent_sites_lon,
                                      y=vent_sites_lat,
                                      mode="markers",
@@ -469,14 +471,6 @@ class SentryDashboard(object):
                                        mode="markers",
                                        marker=dict(size=20, color="green"),
                                        name="Vents")
-        # moorings_lon = [-129.0823, -129.0875, -129.0989, -129.1067]
-        # moorings_lat = [47.9737, 47.9747, 47.9334, 47.9355]
-        moorings_lon = []  # [-129.0823, -129.0875]#, -129.0989, -129.1067]
-        moorings_lat = []  # [47.9737, 47.9747]#, 47.9334, 47.9355]
-        self.moorings_plot = go.Scatter(x=moorings_lon,
-                                        y=moorings_lat,
-                                        mode="markers",
-                                        name="Moorings")
 
         # create the dash app and register layout
         app = Dash(__name__, use_pages=True, pages_folder="",
@@ -768,8 +762,7 @@ class SentryDashboard(object):
                                               colorbar=dict(thickness=20,
                                                             x=-0.2,
                                                             tickfont=dict(size=20))))
-            map_fig = [self.bathy_2dplot,
-                       self.vents_plot, self.moorings_plot, mfig]
+            map_fig = [self.bathy_2dplot, self.vents_plot, mfig]
             time_fig = [tfig]
 
             # add click-interface information
@@ -989,15 +982,15 @@ class SentryDashboard(object):
                                                   dcc.Graph(id="graph-content-currenty", style={'width': '50vw', 'height': '30vh'})]), ], style={'display': 'flex'})], fluid=True)
         return(layout)
 
-    def get_bathy_data(self):
+    def get_bathy_data(self, subsample=1):
         """Read in the data from a bathy file, if any."""
         bathy_df = pd.read_table(self.bathyfile, names=[
-            "lon", "lat", "depth"], sep=",").dropna()
+            "lon", "lat", "depth"], delim_whitespace=True).dropna()
         eb, nb, _, _ = utm.from_latlon(
             bathy_df.lat.values, bathy_df.lon.values)
         bathy_df.loc[:, "northing"] = nb
         bathy_df.loc[:, "easting"] = eb
-        return bathy_df
+        return bathy_df.iloc[::subsample]
 
     def compute_potential_density_and_spice(self, salt, temp, depth, lat, lon):
         """Computed oceanographic measurements."""
