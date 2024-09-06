@@ -877,6 +877,8 @@ class SentryDashboard(object):
             currenty_fig.update_layout(title="Current Magnitude - True North", uirevision=True)
             return(quiv, currentx_fig, currenty_fig)
 
+        app.css.config.serve_locally = True
+        app.scripts.config.serve_locally = True
         app.run(debug=True)
 
     def _create_app_layout(self):
