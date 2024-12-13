@@ -487,6 +487,9 @@ class SentryDashboard(object):
                            layout=self._create_timeseries_layout())
         dash.register_page(
             "simple_exploration", layout=self._create_threshold_layout())
+        #@skachur 
+        dash.register_page(
+            "color_exploration", layout=self._create_color_map_layout())
         dash.register_page("3D_map", layout=self._create_map_layout())
         dash.register_page("overhead_map_with_time",
                            layout=self._create_maptime_layout())
@@ -659,6 +662,64 @@ class SentryDashboard(object):
             scaty.update_layout(font=dict(size=20),
                                 hoverlabel=dict(font_size=20))
             return(fig, scatx, scaty)
+        
+        #callback for color correlation map
+        #@skachur
+        @callback(Output("color-map", "figure"),
+          Input("x-variable-selection", "value"),
+          Input("y-variable-selection", "value"),
+          Input("z-variable-selection", "value"))
+        def plot_maps(x_val, y_val, z_val):
+            """Render the color map based on the selected variables."""
+
+            # Reading and combining the data
+            map_df = self.read_and_combine_dataframes(include_location=True)
+            
+            # Normalizing the selected variables for coloring (we'll map the values of the variables to a color scale)
+            normalized_x = (map_df[x_val] - np.min(map_df[x_val])) / (np.max(map_df[x_val]) - np.min(map_df[x_val]))
+            normalized_y = (map_df[y_val] - np.min(map_df[y_val])) / (np.max(map_df[y_val]) - np.min(map_df[y_val]))
+            normalized_z = (map_df[z_val] - np.min(map_df[z_val])) / (np.max(map_df[z_val]) - np.min(map_df[z_val]))
+
+            # Calculating the RGB colors based on the selected variables
+            colors = []
+            for i in range(len(map_df)):
+                r = int(normalized_x[i] * 255)  # Red channel based on x-variable
+                g = int(normalized_y[i] * 255)  # Green channel based on y-variable
+                b = int(normalized_z[i] * 255)  # Blue channel based on z-variable
+                
+                r = min(255, max(0, r))
+                g = min(255, max(0, g))
+                b = min(255, max(0, b))
+
+                colors.append(f'rgb({r},{g},{b})')
+
+            # Creating the map plot
+            fig = make_subplots(rows=1, cols=1, specs=[[{"type": "scatter"}]])
+
+            fig.add_trace(go.Scatter(
+                x=map_df['lon'],  # Longitude
+                y=map_df['lat'],  # Latitude
+                mode='markers',
+                marker=dict(
+                    size=8,
+                    color=colors,
+                    line=dict(width=0.5, color='black')
+                ),
+                text=map_df[[x_val, y_val, z_val]],  # Display the variable values on hover
+            ))
+
+            fig.update_layout(
+                title="2D Map with RGB Color Contributions from Variables",
+                xaxis_title="Longitude",
+                yaxis_title="Latitude",
+                showlegend=False,
+                geo=dict(
+                    scope='world',
+                    projection_type='mercator'
+                ),
+            )
+
+            return(fig)
 
         # callback for map rendering page
         @callback(Output("3d-map", "figure"),
@@ -935,7 +996,20 @@ class SentryDashboard(object):
                                          dbc.Col([dcc.Graph(id="graph-content-anomaly-x", style={'width': '50vw', 'height': '30vh'}),
                                                   dcc.Graph(id="graph-content-anomaly-y", style={'width': '50vw', 'height': '30vh'})]), ], style={'display': 'flex'})], fluid=True)
         return(layout)
-
+    #@skachur 
+    def _create_color_map_layout(self):
+        """Create the ability to examine thresholds in a dashboard."""
+        layout = dbc.Container([dbc.Row([html.Div(children=[html.H1(children="Simple Data Exploration Dashboard", style={"textAlign": "center"})]),
+                                         html.Div(children=["Select first variable (Red):",
+                                                            dcc.Dropdown(self.keys, "Turbidity", id="x-variable-selection")]),
+                                         html.Div(children=["Select second variable (Green):",
+                                                            dcc.Dropdown(self.keys, "Temperature", id="y-variable-selection")],
+                                                  style={'margin-top': 20}),
+                                         html.Div(children=["Select third variable (Blue):",
+                                                            dcc.Dropdown(self.keys, "Anomaly", id="z-variable-selection")],
+                                                  style={'margin-top': 20})]),
+                                dbc.Row([dbc.Col([dcc.Graph(id="color-map", style={'width': '100vw', 'height': '80vh'})])], style={'display': 'flex'})], fluid=True)
+        return(layout)
     def _create_map_layout(self):
         """Create the map dashboard scene."""
         layout = html.Div([html.H1(children="Map Dashboard", style={"textAlign": "center"}),

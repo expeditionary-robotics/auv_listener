@@ -6,19 +6,19 @@ def apply_underwater_color_correction_v2(image):
     """
     Underwater color correction.
     """
-    # Step 1: White balance by scaling the red channel
+    # Balancing by scaling the red channel
     b, g, r = cv2.split(image)
     r = np.clip(r * 1.5, 0, 255).astype(np.uint8)  # Boost red channel
     corrected_image = cv2.merge((b, g, r))
 
-    # Step 2: Apply CLAHE to avoid over-brightening
+    # Applying CLAHE to avoid over-brightening
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     b = clahe.apply(b)
     g = clahe.apply(g)
     r = clahe.apply(r)
     contrast_enhanced_image = cv2.merge((b, g, r))
 
-    # Step 3: Apply gamma correction
+    # Applying gamma correction
     gamma = 0.8  # Lower gamma to reduce brightness of light areas
     inv_gamma = 1.0 / gamma
     gamma_table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in range(256)]).astype("uint8")
