@@ -9,6 +9,7 @@ def apply_underwater_color_correction_v2(image):
     # Balancing by scaling the red channel
     b, g, r = cv2.split(image)
     r = np.clip(r * 1.5, 0, 255).astype(np.uint8)  # Boost red channel
+    g = np.clip(g * 1.25, 0, 255).astype(np.uint8)  # Boost green channel
     corrected_image = cv2.merge((b, g, r))
 
     # Applying CLAHE to avoid over-brightening
@@ -33,7 +34,7 @@ def process_images(input_folder, output_folder):
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
-    image_files = [f for f in os.listdir(input_folder) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    image_files = [f for f in os.listdir(input_folder) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.tif'))]
     if not image_files:
         print("No images found in the input folder.")
         return
@@ -55,8 +56,8 @@ def process_images(input_folder, output_folder):
         print(f"Saved corrected image to: {output_path}")
 
 # Paths to input and output folders
-input_folder = "./diver"  # Replace with your actual input folder path
-output_folder = "./processed_images"  # Replace with your actual output folder path
+input_folder = "./proc1"  
+output_folder = "./proc2"  
 
 # Process all images in the input folder and save them to the output folder
 process_images(input_folder, output_folder)
