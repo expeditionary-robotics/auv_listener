@@ -1,14 +1,22 @@
 # Sentry information for filtering
-science_queue: 31
-status_queue: 0
+# Update these in consultation with the Sentry operators
+science_queue: 31  # for Sentry science data
+status_queue: 0  # for standard Sentry status data
 methane_queue: 100  # for SAGE
 supr_queue: 62  # for supr
 mets_queue: 101  # for Mets
 obs_queue: 102  # high sensitvity obs
 
 # USBL information for filtering
-target_ids: [0, 1, 2, 5]
-target_names: ["sentry", "jason", "ship", "rosette"]
+# Update these in consultation with the Sentry operators and marine techs
+# The target ID is the "target" that the VFR message is pinging
+# It is important to know what the Sentry target ID is for the dashboard
+# Other IDs can be added for logging other assets in the water if of interest
+
+# target_ids: [0, 1, 2, 5]
+# target_names: ["sentry", "jason", "ship", "rosette"]
+target_ids: [0]
+target_names: ["sentry"]
 
 
 # Sentry IP address : 192.168.100.226

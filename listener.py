@@ -7,9 +7,9 @@ Listens to port 100 on 127.0.0.1 and writes all data heard there
 to ./raw_dive614. All messages received are also printed verbosely
 to terminal.
 
-Authors: Genevieve Flaspohler and Victoria Preston
-Update: August 2022
-Contact: {geflaspo, vpreston}@mit.edu
+Authors: Victoria Preston (v1 Genevieve Flaspohler)
+Update: August 2026
+Contact: vpreston@olin.edu
 """
 import os
 import datetime

@@ -4,9 +4,9 @@ STAT_MESSAGE = b'>SMS:xxxx, var | -999.99 pos_ned goal_ned altitude heading hvel
 SCI_MESSAGE = b'>SMS:xxxx, var | fixed oxygen obs orp ctdtemp ctdsalt parodepth'
 EXP_MESSAGE = b'>SMS:xxxx, var | laser_time,laser_temp,ringdown_ratio,fundamental_meth,aux_time,cell_temp,cell_press,house_temp,house_press,house_humid,states'
 
-Authors: Genevieve Flaspohler and Victoria Preston
-Update: August 2022
-Contact: {geflaspo, vpreston}@mit.edu
+Authors: Victoria Preston (v1 Genevieve Flaspohler)
+Update: August 2026
+Contact: vpreston@olin.edu
 """
 
 
@@ -50,9 +50,9 @@ def usbl_message():
     vehicle_id = 0
     ship_id = 2
     solution = np.random.choice(["SOLN_USBL", "SOLN_GPS0"])
-    lat = np.float32(48.0 + np.random.rand(1)[0])
-    long = np.float32(-129.0 + np.random.rand(1)[0])
-    depth = np.float32(-1920. + 100. * np.random.rand(1)[0])
+    lat = np.float32(45.99 + 0.01*(np.random.rand(1)[0]-0.5))
+    long = np.float32(-130.03 + 0.01*(np.random.rand(1)[0]-0.5))
+    depth = np.float32(-1560. + 10.*np.random.rand(1)[0])
     blah1 = 0.0
     blah2 = 10
     blah3 = 0.0

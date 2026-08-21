@@ -10,9 +10,11 @@ matplotlib = "*"
 datetime = "*"
 pandas = "*"
 argparse = "*"
-bagpy = "*"
 dash = "*"
 dash-bootstrap-components = "*"
+pyyaml = "*"
+gsw = "*"
+utm = "*"
 
 [dev-packages]
 

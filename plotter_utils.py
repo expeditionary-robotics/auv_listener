@@ -387,33 +387,35 @@ class LiveSpatialPlot(Live2DPlot):
 class SentryDashboard(object):
     """Creates a plotly dashboard that updates with streamed data."""
 
-    def __init__(self, sentryfile, sensorfile, metsfile, backscatterfile, usblfile, bathyfile, currentfile, keys, numkeys):
+    def __init__(self,
+                 sentryfile,  # must always have this
+                 bathydata,  # must always have this
+                 usblfile,  # must always have this
+                 sensorfile="None",  # optional, for experimental data
+                 metsfile="None",  # optional, for additional METS
+                 backscatterfile="None",  # optional, for additional backscatter
+                 currentfile="None",  # optional, for OCN currents data
+                 ventdata=None,  # optional, for plotting vents
+                 equipmentdata=None,  # optional, for plotting other equipment
+                 keys="Turbidity,ORP,Depth,Temperature,Salinity,Oxygen,dORPdt_log",  # what to plot
+                 numkeys=6):  # how many plots to make on default screen
+        
         self.datafile = sentryfile  # base case sentry data
-        self.bathyfile = bathyfile  # bathy underlay
+        self.usblfile = usblfile  # usbl nav data
+        self.bathy = bathydata  # bathy underlay
         self.keys = keys.split(",")  # keys to display on charts
         self.numkeys = numkeys  # number of keys to display on quickviews
 
-        self.sensorfile = sensorfile  # experimental data
-        if self.sensorfile == 'None':
-            self.sensorfile = None
-        self.metsfile = metsfile  # mets methane sensor data
-        if self.metsfile == 'None':
-            self.metsfile = None
-        self.backscatterfile = backscatterfile  # aux OBS data
-        if self.backscatterfile == 'None':
-            self.backscatterfile = None
-        self.usblfile = usblfile  # usbl nav data
-        if self.usblfile == 'None':
-            self.usblfile = None
-        self.currentfile = currentfile  # caux current data
-        if self.currentfile == "None":
-            self.currentfile = None
+        self.sensorfile = None if sensorfile == "None" else sensorfile  # experimental data
+        self.metsfile = None if metsfile == "None" else metsfile  # mets methane sensor data
+        self.backscatterfile = None if backscatterfile == "None" else backscatterfile # aux OBS data
+        self.currentfile = None if currentfile == "None" else currentfile  # caux current data
         
-
         # read in the initial sentry science and extra sensor data
         self.df = self.read_and_combine_dataframes(include_location=False)
         self.last_t = np.nanmax(self.df.t)
         self.last_current_t = np.nanmax(self.df.t)
+        print("Made dataframes of sentry science and nav data...")
 
         # create a dictionary of sliders
         self.sliders = {}
@@ -428,12 +430,11 @@ class SentryDashboard(object):
                                                         value=[np.nanmin(self.df[key]), np.nanmax(self.df[key])],
                                                         id='current-slider')
 
-        # cache the bathy underlay in memory
-        self.bathy = self.get_bathy_data()
-        self.bathy_3dplot = go.Mesh3d(x=self.bathy.lon[0::10],
-                                      y=self.bathy.lat[0::10],
-                                      z=self.bathy.depth[0::10],
-                                      intensity=self.bathy.depth[0::10],
+        # cache the bathy underlay in temporary memory
+        self.bathy_3dplot = go.Mesh3d(x=self.bathy.lon,
+                                      y=self.bathy.lat,
+                                      z=self.bathy.depth,
+                                      intensity=self.bathy.depth,
                                       colorscale='Viridis',
                                       opacity=0.50,
                                       name="Bathy")
@@ -443,64 +444,75 @@ class SentryDashboard(object):
         ylat = np.linspace(latmin, latmax, 200)
         xlon, ylat = np.meshgrid(xlon, ylat)
         Z = griddata((self.bathy.lon, self.bathy.lat),
-                     self.bathy.depth, (xlon, ylat), method="cubic")
+                      self.bathy.depth, (xlon, ylat), method="cubic")
         self.bathy_2dplot = go.Contour(x=xlon[0],
                                        y=ylat[:, 0],
                                        z=Z,
-                                       contours=dict(
-                                           start=-2800., end=-2000., size=20),
+                                       contours=dict(start=round(np.nanmin(Z.flatten())),
+                                                     end=round(np.nanmax(Z.flatten())),
+                                                     size=10),
                                        contours_coloring="lines",
-                                       colorscale="Greys",
-                                       line=dict(width=0.5),
+                                       colorscale="Turbo",
+                                       line=dict(width=1.0),
+                                       colorbar=dict(x=1.25),
                                        name="Bathy")
-        # vent_sites_lon = [-129.0662, -129.0756, -
-        #                   129.0894, -129.0981, -129.1082]
-        # vent_sites_lat = [47.9969, 47.9822, 47.9666, 47.9487, 47.9233]
-        vent_sites_lon = [-129.0981, -129.0894]
-        vent_sites_lat = [47.9487, 47.9666]
+        print("Made bathy plotting tiles...")
+
+        # Cache venting data
+        if ventdata is not None:
+            vent_sites_lon = ventdata.lon
+            vent_sites_lat = ventdata.lat
+            vent_sites_easting, vent_sites_northing, _, _ = utm.from_latlon(
+            np.asarray(vent_sites_lat), np.asarray(vent_sites_lon))
+        else:
+            vent_sites_lon = []
+            vent_sites_lat = []
+            vent_sites_easting = []
+            vent_sites_northing = []
         self.vents_plot = go.Scatter(x=vent_sites_lon,
                                      y=vent_sites_lat,
                                      mode="markers",
                                      name="Vents")
-        vent_sites_easting, vent_sites_northing, _, _ = utm.from_latlon(
-            np.asarray(vent_sites_lat), np.asarray(vent_sites_lon))
         self.vents_m_plot = go.Scatter(x=vent_sites_easting,
                                        y=vent_sites_northing,
                                        mode="markers",
                                        marker=dict(size=20, color="green"),
                                        name="Vents")
-        # moorings_lon = [-129.0823, -129.0875, -129.0989, -129.1067]
-        # moorings_lat = [47.9737, 47.9747, 47.9334, 47.9355]
-        moorings_lon = []  # [-129.0823, -129.0875]#, -129.0989, -129.1067]
-        moorings_lat = []  # [47.9737, 47.9747]#, 47.9334, 47.9355]
-        self.moorings_plot = go.Scatter(x=moorings_lon,
-                                        y=moorings_lat,
-                                        mode="markers",
-                                        name="Moorings")
+        print("Plotting vents...")
+
+        # Cache any existing equipment
+        if equipmentdata is not None:
+            equipment_lon = equipmentdata.lon
+            equipment_lat = equipmentdata.lat
+        else:
+            equipment_lon = []
+            equipment_lat = []
+        self.equipment_plot = go.Scatter(x=equipment_lon,
+                                         y=equipment_lat,
+                                         mode="markers",
+                                         name="Moorings")
+        print("Plotting equipment...")
 
         # create the dash app and register layout
-        app = Dash(__name__, use_pages=True, pages_folder="",
-                   external_stylesheets=[dbc.themes.BOOTSTRAP])
-        dash.register_page(
-            "home", path="/", layout=self._create_home_layout())
-        dash.register_page("extended_timeseries",
-                           layout=self._create_timeseries_layout())
-        dash.register_page(
-            "simple_exploration", layout=self._create_threshold_layout())
+        app = Dash(__name__, use_pages=True, pages_folder="", external_stylesheets=[dbc.themes.BOOTSTRAP])
+        dash.register_page("home", path="/", layout=self._create_home_layout())
+        dash.register_page("extended_timeseries",layout=self._create_timeseries_layout())
+        dash.register_page("simple_exploration", layout=self._create_threshold_layout())
         dash.register_page("3D_map", layout=self._create_map_layout())
-        dash.register_page("overhead_map_with_time",
-                           layout=self._create_maptime_layout())
+        dash.register_page("overhead_map_with_time",layout=self._create_maptime_layout())
+        
         if self.sensorfile is not None:
-            dash.register_page("sage_engineering",
-                               layout=self._create_SAGE_layout())
+            dash.register_page("sage_engineering",layout=self._create_SAGE_layout())
         if self.currentfile is not None:
-            dash.register_page("ocean_currents_data",
-                               layout=self._create_current_layout())
+            dash.register_page("ocean_currents_data",layout=self._create_current_layout())
 
         app.layout = self._create_app_layout()
+        print("Made dashboard")
 
         ############
+        ############
         # create dashboard callbacks
+        ############
         ############
 
         # callback for quickview home page with autorefresh timelines
@@ -514,15 +526,20 @@ class SentryDashboard(object):
                                                 y=self.df[self.keys[i]],
                                                 mode="lines",
                                                 name=self.keys[i],), row=i+1, col=1)
-            time_plots.update_layout(
-                height=1900, uirevision=True, showlegend=False, margin=dict(t=20), font=dict(size=20), hoverlabel=dict(font_size=20))
+            time_plots.update_layout(height=1900,
+                                     uirevision=True,
+                                     showlegend=False,
+                                     margin=dict(t=20),
+                                     font=dict(size=20),
+                                     hoverlabel=dict(font_size=20))
             return(time_plots)
 
         # callback for main page/autorefreshing timelines
         @callback(Output("graph-content-turbidity", "figure"),
                   Output("graph-content-orp", "figure"),
                   Output("graph-content-depth", "figure"),
-                  Output("graph-content-methane", "figure"),
+                  Output("graph-content-methanesage", "figure"),
+                  Output("graph-content-methanemets", "figure"),
                   Output("graph-content-potden", "figure"),
                   Output("graph-content-spice", "figure"),
                   Output("graph-content-temperature", "figure"),
@@ -531,56 +548,46 @@ class SentryDashboard(object):
                   Input("graph-update", "n_intervals"))
         def stream(n):
             self.df = self.read_and_combine_dataframes(include_location=True)
-            figturb = px.line(self.df, x=self.df.index, y=self.df.Turbidity,  hover_data=[
-                              "lat", "lon", "Depth"])
+            
+            figturb = px.line(self.df, x=self.df.index, y=self.df.Turbidity,  hover_data=["lat", "lon", "Depth"])
             figturb.update_layout(uirevision=True, font=dict(size=20))
-            figorp = px.line(self.df, x=self.df.index,
-                             y=self.df.ORP, hover_data=["lat", "lon", "Depth"])
-            figorp.update_layout(uirevision=True, font=dict(
-                size=20), hoverlabel=dict(font_size=20))
-            figtemp = px.line(self.df, x=self.df.index, y=self.df.Temperature, hover_data=[
-                              "lat", "lon", "Depth"])
-            figtemp.update_layout(uirevision=True, font=dict(
-                size=20), hoverlabel=dict(font_size=20))
+            
+            figorp = px.line(self.df, x=self.df.index, y=self.df.ORP, hover_data=["lat", "lon", "Depth"])
+            figorp.update_layout(uirevision=True, font=dict(size=20), hoverlabel=dict(font_size=20))
+            
+            figtemp = px.line(self.df, x=self.df.index, y=self.df.Temperature, hover_data=["lat", "lon", "Depth"])
+            figtemp.update_layout(uirevision=True, font=dict(size=20), hoverlabel=dict(font_size=20))
+            
             if self.sensorfile is not None:
-                figmethane = px.line(self.df, x=self.df.index, y=self.df.methane_ppm, hover_data=[
-                                     "lat", "lon", "Depth"], markers=True)
-                figmethane.update_layout(uirevision=True, font=dict(
-                    size=20), hoverlabel=dict(font_size=20))
+                figmethanesage = px.line(self.df, x=self.df.index, y=self.df.methane_ppm, hover_data=["lat", "lon", "Depth"], labels={"y":"SAGE Methane"})
+                figmethanesage.update_layout(uirevision=True, font=dict(size=20), hoverlabel=dict(font_size=20))
             else:
-                figmethane = px.line(
-                    x=self.df.index, y=np.zeros_like(self.df.t))
-                figmethane.update_layout(uirevision=True, font=dict(size=20))
+                figmethanesage = px.line(x=self.df.index, y=np.zeros_like(self.df.t), labels={"y":"SAGE Methane"})
+                figmethanesage.update_layout(uirevision=True, font=dict(size=20))
+            
             if self.metsfile is not None:
-                figmethane = px.line(self.df, x=self.df.index, y=self.df.methane_mets, hover_data=[
-                                     "lat", "lon", "Depth"], markers=True)
-                figmethane.update_layout(uirevision=True, font=dict(
-                    size=20), hoverlabel=dict(font_size=20))
+                figmethanemets = px.line(self.df, x=self.df.index, y=self.df.methane_mets, hover_data=["lat", "lon", "Depth"], labels={"y":"Mets Methane"})
+                figmethanemets.update_layout(uirevision=True, font=dict(size=20), hoverlabel=dict(font_size=20))
             else:
-                figmethane = px.line(
-                    x=self.df.index, y=np.zeros_like(self.df.t))
-                figmethane.update_layout(uirevision=True, font=dict(size=20))
-            figdepth = px.line(self.df, x=self.df.index, y=-self.df.Depth, hover_data=[
-                               "lat", "lon", "Depth"])
-            figdepth.update_layout(uirevision=True, font=dict(
-                size=20), hoverlabel=dict(font_size=20))
-            figo2 = px.line(self.df, x=self.df.index, y=self.df.Oxygen, hover_data=[
-                            "lat", "lon", "Depth"])
-            figo2.update_layout(uirevision=True, font=dict(
-                size=20), hoverlabel=dict(font_size=20))
-            figsalt = px.line(self.df, x=self.df.index, y=self.df.Salinity, hover_data=[
-                              "lat", "lon", "Depth"])
-            figsalt.update_layout(uirevision=True, font=dict(
-                size=20), hoverlabel=dict(font_size=20))
-            figpotden = px.line(self.df, x=self.df.index, y=-self.df.potential_density, hover_data=[
-                "lat", "lon", "Depth"])
-            figpotden.update_layout(uirevision=True, font=dict(
-                size=20), hoverlabel=dict(font_size=20))
-            figspice = px.line(self.df, x=self.df.index, y=self.df.spice, hover_data=[
-                "lat", "lon", "Depth"])
-            figspice.update_layout(uirevision=True, font=dict(
-                size=20), hoverlabel=dict(font_size=20))
-            return(figturb, figorp, figmethane, figdepth, figpotden, figspice, figtemp, figsalt, figo2)
+                figmethanemets = px.line(x=self.df.index, y=np.zeros_like(self.df.t), labels={"y":"Mets Methane"})
+                figmethanemets.update_layout(uirevision=True, font=dict(size=20))
+            
+            figdepth = px.line(self.df, x=self.df.index, y=-self.df.Depth, hover_data=["lat", "lon", "Depth"], labels={"y":"Depth"})
+            figdepth.update_layout(uirevision=True, font=dict(size=20), hoverlabel=dict(font_size=20))
+            
+            figo2 = px.line(self.df, x=self.df.index, y=self.df.Oxygen, hover_data=["lat", "lon", "Depth"])
+            figo2.update_layout(uirevision=True, font=dict(size=20), hoverlabel=dict(font_size=20))
+            
+            figsalt = px.line(self.df, x=self.df.index, y=self.df.Salinity, hover_data=["lat", "lon", "Depth"])
+            figsalt.update_layout(uirevision=True, font=dict(size=20), hoverlabel=dict(font_size=20))
+
+            figpotden = px.line(self.df, x=self.df.index, y=-self.df.potential_density, hover_data=["lat", "lon", "Depth"], labels={"y":"Potential Density"})
+            figpotden.update_layout(uirevision=True, font=dict(size=20), hoverlabel=dict(font_size=20))
+            
+            figspice = px.line(self.df, x=self.df.index, y=self.df.spice, hover_data=["lat", "lon", "Depth"])
+            figspice.update_layout(uirevision=True, font=dict(size=20), hoverlabel=dict(font_size=20))
+            
+            return(figturb, figorp, figdepth, figmethanesage, figmethanemets, figpotden, figspice, figtemp, figsalt, figo2)
 
         # callback for SAGE engineering page
         @callback(Output("graph-content-sage", "figure"),
@@ -760,6 +767,7 @@ class SentryDashboard(object):
                 mfig = go.Scatter(x=df.lon,
                                   y=df.lat,
                                   mode="markers",
+                                  name=vtarg,
                                   marker=dict(size=5,
                                               color=df[vtarg],
                                               colorscale="Inferno",
@@ -768,8 +776,7 @@ class SentryDashboard(object):
                                               colorbar=dict(thickness=20,
                                                             x=-0.2,
                                                             tickfont=dict(size=20))))
-            map_fig = [self.bathy_2dplot,
-                       self.vents_plot, self.moorings_plot, mfig]
+            map_fig = [self.bathy_2dplot, self.vents_plot, self.equipment_plot, mfig]
             time_fig = [tfig]
 
             # add click-interface information
@@ -779,21 +786,22 @@ class SentryDashboard(object):
                 map_fig.append(go.Scatter(x=loc.lon,
                                           y=loc.lat,
                                           mode="markers",
-                                          marker=dict(size=20)))
+                                          marker=dict(size=20),
+                                          name="Time Selection"))
             if hovermap is not None:
                 hdata = hovermap["points"][0]
                 time = df[(df.lon == hdata["x"]) & (df.lat == hdata["y"])]
-                time_fig.append(go.Scatter(
-                    x=time.index, y=time[vtarg], mode="markers", marker=dict(size=10, color=['#EF553B'])))
+                time_fig.append(go.Scatter(x=time.index,
+                                           y=time[vtarg],
+                                           mode="markers",
+                                           marker=dict(size=10, color=['#EF553B'])))
 
             # create the final map
             final_map_fig = go.Figure(map_fig)
             final_map_fig.update_yaxes(scaleanchor="x", scaleratio=1)
-            final_map_fig.update_layout(uirevision=True, font=dict(
-                size=20), hoverlabel=dict(font_size=20))
+            final_map_fig.update_layout(uirevision=True, font=dict(size=20), hoverlabel=dict(font_size=20))
             final_time_fig = go.Figure(time_fig)
-            final_time_fig.update_layout(uirevision=True, showlegend=False, font=dict(
-                size=20), hoverlabel=dict(font_size=20))
+            final_time_fig.update_layout(uirevision=True, showlegend=False, font=dict(size=20), hoverlabel=dict(font_size=20))
 
             return(final_time_fig, final_map_fig)
 
@@ -897,7 +905,8 @@ class SentryDashboard(object):
         layout = html.Div([html.H1(children="Extended Timeseries Dashboard", style={"textAlign": "center"}),
                            dcc.Graph(id="graph-content-turbidity"),
                            dcc.Graph(id="graph-content-orp"),
-                           dcc.Graph(id="graph-content-methane"),
+                           dcc.Graph(id="graph-content-methanesage"),
+                           dcc.Graph(id="graph-content-methanemets"),
                            dcc.Graph(id="graph-content-depth"),
                            dcc.Graph(id="graph-content-potden"),
                            dcc.Graph(id="graph-content-spice"),
@@ -961,8 +970,9 @@ class SentryDashboard(object):
                                                                             id='maptime-slider-time')],
                                                   style={"margin-top": 20})
                                          ]),
-                                dbc.Row([dbc.Col([dcc.Graph(id="graph-maptime-time", style={"width": "50vw", "height": "60vh"})]),
-                                         dbc.Col([dcc.Graph(id="graph-maptime-map", style={"width": "45vw", "height": "80vh"})]), ], style={"display": "flex"})], fluid=True)
+                                dbc.Row([dcc.Graph(id="graph-maptime-time", style={"width": "100vw", "height": "35vh"})]),
+                                dbc.Row([dcc.Graph(id="graph-maptime-map", style={"width": "100vw", "height": "80vh"})]), ],
+                                fluid=True)
         return(layout)
 
     def _create_current_layout(self):
@@ -989,16 +999,6 @@ class SentryDashboard(object):
                                                   dcc.Graph(id="graph-content-currenty", style={'width': '50vw', 'height': '30vh'})]), ], style={'display': 'flex'})], fluid=True)
         return(layout)
 
-    def get_bathy_data(self):
-        """Read in the data from a bathy file, if any."""
-        bathy_df = pd.read_table(self.bathyfile, names=[
-            "lon", "lat", "depth"], sep=",").dropna()
-        eb, nb, _, _ = utm.from_latlon(
-            bathy_df.lat.values, bathy_df.lon.values)
-        bathy_df.loc[:, "northing"] = nb
-        bathy_df.loc[:, "easting"] = eb
-        return bathy_df
-
     def compute_potential_density_and_spice(self, salt, temp, depth, lat, lon):
         """Computed oceanographic measurements."""
         press = gsw.p_from_z(-depth, lat=lat)
@@ -1011,21 +1011,20 @@ class SentryDashboard(object):
     def read_and_combine_dataframes(self, include_location=False):
         """Helper to constantly create new DF objects for plotting."""
         # combine only the sentry and sensor dataframes
-        df = pd.read_csv(self.datafile, sep=",", header=None, names=[
-            "Time", "Oxygen", "Turbidity", "ORP", "Temperature", "Salinity", "Depth"])
+        df = pd.read_csv(self.datafile, sep=",", header=None, names=["Time", "Oxygen", "Turbidity", "ORP", "Temperature", "Salinity", "Depth"])
         df["Depth"] = -df["Depth"]
         df["Time"] = pd.to_datetime(df["Time"])
-        df.loc[:, "t"] = (
-            df["Time"] - pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
+        df.loc[:, "t"] = (df["Time"] - pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
         df.loc[:, "dORPdt"] = df.ORP.rolling(window=2).apply(lambda x: (x.iloc[-1] - x.iloc[0])/(2))
         dORPdt_mask = df.dORPdt < 0.0
-        df.loc[:, "dORPdt_log"] = np.log(np.fabs(df.dORPdt * dORPdt_mask))
+        with np.errstate(divide='ignore'):
+            df.loc[:, "dORPdt_log"] = np.log(np.fabs(df.dORPdt * dORPdt_mask))
         df["dORPdt_log"].replace([-np.inf, np.inf], -15, inplace=True)
 
         merge_df = df
         sentry_data_index = merge_df.t.values[0]
 
-        # read in the methane sensor data
+        # read in the experimental sensor data
         if self.sensorfile is not None:
             self.sensor = pd.read_table(self.sensorfile,
                                         sep=",",
@@ -1053,7 +1052,9 @@ class SentryDashboard(object):
         else:
             pass
         
+        # read in the mets sensor data
         if self.metsfile is not None:
+            print("reading mets data")
             self.mets = pd.read_table(self.metsfile,
                                         sep=",",
                                         header=None,
@@ -1074,7 +1075,8 @@ class SentryDashboard(object):
             merge_df = merge_df.merge(self.mets[["t", "methane_mets"]], how="outer", on="t")
         else:
             pass
-            
+
+        # read in the aux backscatter data    
         if self.backscatterfile is not None:
             # SDQ 102:2023-09-12T17:38:44 +0.0342 +0.0000 +0.0000 +0.0000???
             self.backscatter = pd.read_table(self.backscatterfile,
@@ -1099,6 +1101,7 @@ class SentryDashboard(object):
         else:
             pass
 
+        # read in the USBL data
         if include_location is True and self.usblfile is not None:
             # include the usbl location information
             self.usbl = pd.read_table(self.usblfile, sep=",", header=None, names=[
@@ -1113,6 +1116,7 @@ class SentryDashboard(object):
             merge_df.loc[:, "lon"] = np.zeros_like(merge_df.t)
             merge_df.loc[:, "depth_usbl"] = np.zeros_like(merge_df.t)
 
+        # read in the OCN data
         if self.currentfile is not None:
             df = pd.read_csv(self.currentfile,
                              sep=",")
@@ -1124,8 +1128,7 @@ class SentryDashboard(object):
         merge_df = merge_df.sort_values(by="t")
         merge_df = merge_df.drop_duplicates(subset=["t"], keep="first")
         merge_df = merge_df[merge_df.t >= sentry_data_index]
-        merge_df.loc[:, "Global_Time"] = pd.to_datetime(
-            merge_df["t"], unit="s")
+        merge_df.loc[:, "Global_Time"] = pd.to_datetime(merge_df["t"], unit="s")
         merge_df = merge_df.set_index("Global_Time")
         merge_df = merge_df.interpolate(method="ffill")
         pot_den, spice = self.compute_potential_density_and_spice(merge_df.Salinity.values,
@@ -1138,8 +1141,7 @@ class SentryDashboard(object):
 
         if self.usblfile is not None:
             merge_df = merge_df.dropna(subset=["lat", "lon"])
-            easting, northing, _, _ = utm.from_latlon(
-                merge_df.lat.values, merge_df.lon.values)
+            easting, northing, _, _ = utm.from_latlon(merge_df.lat.values, merge_df.lon.values)
             merge_df.loc[:, "northing"] = northing
             merge_df.loc[:, "easting"] = easting
 

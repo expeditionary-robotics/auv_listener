@@ -6,10 +6,11 @@ the bathy.txt file as a map underlay.
 Individual timeseries, and map will be made available.
 
 Authors: Victoria Preston
-Update: August 2023
-Contact: vpreston@mit.edu
+Update: August 2026
+Contact: vpreston@olin.edu
 """
 import argparse
+import pandas as pd
 from plotter_utils import SentryDashboard
 
 
@@ -36,6 +37,12 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--backscatter", action="store", type=str,
                         help="Read obs data from backscatter sensor.",
                         default="None")
+    parser.add_argument("-v", "--vents", action="store", type=str,
+                        help="Reads vent coordinates lat,lon from file.",
+                        default="None")
+    parser.add_argument("-e", "--equipment", action="store", type=str,
+                        help="Reads mooring or equipment coordinates lat,lon from file.",
+                        default="None")
     parser.add_argument("-k", "--keys", action="store", type=str,
                         help="Keys for plots and analysis",
                         default="Turbidity,ORP,Depth,Temperature,Salinity,Oxygen,dORPdt_log")
@@ -53,8 +60,39 @@ if __name__ == '__main__':
     backscattername = parse.backscatter
     bathyname = parse.bathy
     currentname = parse.current
+    ventsname = parse.vents
+    equipmentname = parse.equipment
     keys = str(parse.keys)
     numkeys = int(parse.numkey)
 
+    # Create persistent variables for passing through
+    bathydata = pd.read_table(bathyname, names=["lon", "lat", "depth"], delim_whitespace=True).dropna()
+    # Reduce bathy tile size for plotting purposes; otherwise rendering will take too long
+    bathy_len = 1e10
+    while bathy_len > 50000:
+        bathydata = bathydata[::2]
+        bathy_len = len(bathydata.lat)
+    
+    if ventsname != "None":
+        ventdata = pd.read_csv(ventsname, names=["lat", "lon"]).dropna()
+    else:
+        ventdata = None
+
+    if equipmentname != "None":
+        equipmentdata = pd.read_csv(equipmentname, names=["lat", "lon"]).dropna()
+    else:
+        equipmentdata = None
+
     # Create the dashboard
-    tp = SentryDashboard(sentryname, sensorname, metsname, backscattername, usblname, bathyname, currentname, keys, numkeys)
+    print("Creating dashboard...")
+    tp = SentryDashboard(sentryfile=sentryname,
+                         sensorfile=sensorname,
+                         metsfile=metsname,
+                         backscatterfile=backscattername,
+                         usblfile=usblname,
+                         bathydata=bathydata,
+                         currentfile=currentname,
+                         ventdata=ventdata,
+                         equipmentdata=equipmentdata,
+                         keys=keys,
+                         numkeys=numkeys)

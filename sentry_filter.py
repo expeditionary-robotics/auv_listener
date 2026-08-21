@@ -7,9 +7,9 @@ File reads in raw data stored in ./data/raw_dive617.txt and writes filtered
 science, status, or instrument data
 to ./dive617_sentry_{status, science, instrument}.
 
-Authors: Genevieve Flaspohler and Victoria Preston
-Update: August 2023
-Contact: {geflaspo, vpreston}@mit.edu
+Authors: Victoria Preston (v1 Genevieve Flaspohler)
+Update: August 2026
+Contact: vpreston@olin.edu
 """
 import os
 import yaml

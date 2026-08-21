@@ -2,9 +2,9 @@
 # Runs a specifed set of python commands to set up Sentry science watchstanding
 # Modify the top variables to set up repo/etc. properly
 
-SENTRY_LOG_NAME='dive_686'  # the name you would like to append to all Sentry data logs, recommended: dive_###
-USBL_LOG_NAME='usbl_686'  # the name you would like to append to all USBL data logs, recommended: usbl_###
-BATHY_FILE='./data/axial.txt'  # a file of bathymetry for displaying; required
+SENTRY_LOG_NAME='test_dive_1'  # the name you would like to append to all Sentry data logs, recommended: dive_###
+USBL_LOG_NAME='test_usbl_1'  # the name you would like to append to all USBL data logs, recommended: usbl_###
+BATHY_FILE='./data/axial.xyz'  # a file of bathymetry for displaying; required
 
 VENT_FILE='./data/CASM_ventsite.txt'  # set to "None" if no vent locations to plot
 EQUIPMENT_FILE='None'  # set to "None" if no equipment locations to plot
@@ -15,8 +15,8 @@ METS_SENSOR='False'  # set to True if there is a METS sensor onboard
 OBS_SENSOR='False'  # set to Trye if there is an extra OBS sensor onboard
 
 IP_ADDRESS='127.0.0.1'  # this is your network address (likely formatted as 192.168.X.X)
-SENTRY_PORT='1238'  # this is the port over the network publishing Sentry SDQ messages
-USBL_PORT='2349'  # this is the port over the network publishing USBL messages
+SENTRY_PORT='1234'  # this is the port over the network publishing Sentry SDQ messages
+USBL_PORT='2345'  # this is the port over the network publishing USBL messages
 
 SENTRY_SAVE_TARGET='./'  # where to save your processed Sentry messages
 USBL_SAVE_TARGET='./'  # where to save your processed USBL messages
@@ -55,6 +55,9 @@ fi
 # Execution Code
 ##########
 read -p "Wait! Did you change the log names and bathy target? If not, press Ctrl+C to cancel and fix. Else press Enter."
+read -p "Press enter to start the spoofer messages"
+python spoofer.py -i $IP_ADDRESS -p $SENTRY_PORT -r 2 &
+python usbl_spoofer.py -i $IP_ADDRESS -p $USBL_PORT -r 2 &
 read -p "Press Enter to start listening over the network."
 python listener.py -i $IP_ADDRESS -p $SENTRY_PORT -f $SENTRY_SAVE_TARGET -n $SENTRY_LOG_NAME &
 python listener.py -i $IP_ADDRESS -p $USBL_PORT -f $USBL_SAVE_TARGET -n $USBL_LOG_NAME &

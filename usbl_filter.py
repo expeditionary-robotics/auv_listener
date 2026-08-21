@@ -6,9 +6,9 @@ Example: python usbl_filter.py -t ./data/raw_usbl.txt -f ./ -n dive613
 Reads in all USBL messages logged to ./data/raw_usbl.txt and writes
 filtered status messages to ./dive613_usbl_{sentry, ship, jason, ctd}.txt.
 
-Authors: Genevieve Flaspohler and Victoria Preston
-Update: August 2023
-Contact: {geflaspo, vpreston}@mit.edu
+Authors: Victoria Preston (v1 Genevieve Flaspohler)
+Update: August 2026
+Contact: vpreston@olin.edu
 """
 import os
 import yaml

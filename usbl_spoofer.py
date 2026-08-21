@@ -7,9 +7,9 @@ over the network 127.0.0.1 to port 100 every 20 seconds.
 If file is not provided random message formats are selected
 and populated from a utils file.
 
-Authors: Genevieve Flaspohler and Victoria Preston
-Update: August 2023
-Contact: {geflaspo, vpreston}@mit.edu
+Authors: Victoria Preston (v1 Genevieve Flaspohler)
+Update: August 2026
+Contact: vpreston@olin.edu
 """
 
 import argparse
@@ -51,7 +51,7 @@ if file is not None:
         realline = np.random.randint(0, num_lines)
         msg = np.random.choice([lines[realline], usbl_message()])
         if len(msg) > 1:
-            print(msg)
+            # print(msg)
             MESSAGE = bytes(msg, encoding="utf8")
             sock.sendto(MESSAGE, (ACOMMS_IP, ACOMMS_PORT))
             time.sleep(ACOMMS_PUB_RATE)
@@ -59,6 +59,6 @@ else:
     while(1):
         msg = np.random.choice(
             [usbl_message()])
-        print(msg)
+        # print(msg)
         sock.sendto(bytes(msg, encoding='utf8'), (ACOMMS_IP, ACOMMS_PORT))
         time.sleep(ACOMMS_PUB_RATE)

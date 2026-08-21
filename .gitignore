@@ -1,4 +1,4 @@
 data/*
+watchstation_test/*
 __pycache__/*
 Pipfile.lock
-

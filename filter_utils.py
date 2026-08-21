@@ -1,8 +1,8 @@
 """Utilities for building a filter file.
 
-Authors: Genevieve Flaspohler and Victoria Preston
-Update: August 2022
-Contact: {geflaspo, vpreston}@mit.edu
+Authors: Victoria Preston (v1 Genevieve Flaspohler)
+Update: August 2026
+Contact: vpreston@olin.edu
 """
 
 import os
@@ -56,6 +56,7 @@ def filter_experimental_message(message):
     """Stand-in function for experimental sensors parsed in queue."""
     return str(message)
 
+
 def filter_supr_message(message):
     """Stand-in function for supr sensors parsed in queue."""
     return str(message)
@@ -64,6 +65,7 @@ def filter_supr_message(message):
 def filter_mets_message(message):
     """Stand-in function for supr sensors parsed in queue."""
     return str(message)
+
 
 def filter_obs_message(message):
     """Stand-in function for high sensitivity obs sensors parsed in queue."""
